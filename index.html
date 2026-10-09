@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HanziBoss · HSK Flashcards</title>
+<meta name="description" content="HanziBoss — clean HSK flashcards structured by level and lesson, following the Standard Course textbook."/>
+<meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)"/>
+<meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23c0392b'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' fill='white' font-family='serif' font-weight='700'%3E%E6%B1%89%3C/text%3E%3C/svg%3E"/>
+
+<!-- Prevent theme flash before React mounts -->
+<script>try{const t=localStorage.getItem('hf-theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Manrope:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        ink:   { DEFAULT:'#1e293b', soft:'#475569', faint:'#94a3b8' },
+        jade:  { DEFAULT:'#10b981', deep:'#059669' },
+        porcelain:'#f8fafc',
+        seal:  '#c0392b',
+        night: { DEFAULT:'#12161d', card:'#1a212b' }
+      },
+      fontFamily: {
+        sans:  ['Manrope','ui-sans-serif','sans-serif'],
+        serif: ['Fraunces','Noto Serif SC','serif'],
+        hanzi: ['"Noto Serif SC"','serif'],
+        /* All hanzi use Noto Serif SC (loaded from Google Fonts above) */
+        kai:   ['"Noto Serif SC"','serif']
+      }
+    }
+  }
+}
+</script>
+
+<style>
+  :root { --seal:#c0392b; }
+  html { color-scheme: light; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  html.dark { color-scheme: dark; }
+  body { -webkit-tap-highlight-color: transparent; transition: background-color .25s ease, color .25s ease; }
+  ::selection { background: rgba(16,185,129,.25); }
+  :focus-visible { outline: 2px solid #10b981; outline-offset: 3px; border-radius: 4px; }
+
+  /* Porcelain paper grain (very subtle, sits above everything, never blocks clicks) */
+  body::after{
+    content:""; position:fixed; inset:0; z-index:60; pointer-events:none; opacity:.04;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
+  }
+  html.dark body::after{ opacity:.07; }
+
+  /* Page transition */
+  @keyframes pageIn{ from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none} }
+  .page{ animation: pageIn .45s cubic-bezier(.22,.61,.36,1) both; }
+
+  /* ---- 3D flashcard flip ---- */
+  .card-scene{ perspective:1400px; }
+  .card-press{ transition: transform .18s ease; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .card-press:active{ transform: scale(.975); }               /* haptic-like tap pulse */
+  .card-inner{
+    position:relative; width:100%; height:100%;
+    transform-style:preserve-3d; will-change:transform;
+    transition: transform .65s cubic-bezier(.3,.9,.32,1);
+  }
+  .card-inner.is-flipped{ transform: rotateY(180deg); }
+  .card-face{
+    position:absolute; inset:0; border-radius:1rem;
+    backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    box-shadow: 0 18px 38px -18px rgba(30,41,59,.35);
+    transition: box-shadow .65s ease;
+  }
+  .card-face.back{ transform: rotateY(180deg); }
+  .card-inner.is-flipped .card-face{ box-shadow: 0 34px 64px -22px rgba(30,41,59,.45); }
+  html.dark .card-face{ box-shadow: 0 18px 40px -18px rgba(0,0,0,.6); }
+  html.dark .card-inner.is-flipped .card-face{ box-shadow: 0 34px 70px -24px rgba(0,0,0,.75); }
+
+  /* Staggered reveal of the back face content + hanzi entrance on card change */
+  @keyframes riseIn{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+  .card-inner.is-flipped .back-content > *{ animation: riseIn .45s cubic-bezier(.2,.7,.3,1) both; }
+  .card-inner.is-flipped .back-content > *:nth-child(1){ animation-delay:.16s }
+  .card-inner.is-flipped .back-content > *:nth-child(2){ animation-delay:.24s }
+  .card-inner.is-flipped .back-content > *:nth-child(3){ animation-delay:.30s }
+  .card-inner.is-flipped .back-content > *:nth-child(4){ animation-delay:.36s }
+  .front-in{ animation: riseIn .5s cubic-bezier(.2,.7,.3,1) .05s both; }
+
+  /* Focus dim layer shown while the card is flipped */
+  .focus-overlay{ background:rgba(30,41,59,.32); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  html.dark .focus-overlay{ background:rgba(0,0,0,.5); }
+
+  /* Vermillion seal (印章) */
+  .seal{
+    display:inline-flex; align-items:center; justify-content:center;
+    background:var(--seal); color:#fff;
+    font-family:'Noto Serif SC',serif; font-weight:700;
+    border-radius:6px; transform:rotate(-4deg);
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.35);
+    user-select:none;
+  }
+  @keyframes stampIn{
+    0%{ transform:scale(2.4) rotate(16deg); opacity:0 }
+    55%{ transform:scale(.94) rotate(-7deg); opacity:1 }
+    100%{ transform:scale(1) rotate(-4deg) }
+  }
+  .stamp{ animation: stampIn .55s cubic-bezier(.2,.9,.3,1.2) .1s both; }
+
+  /* Oversized ghost hanzi on level / lesson cards */
+  .watermark{
+    position:absolute; font-family:'Noto Serif SC',serif; line-height:1;
+    color:#1e293b; opacity:.05; pointer-events:none; user-select:none;
+    transition: transform .5s ease;
+  }
+  html.dark .watermark{ color:#f8fafc; opacity:.06; }
+
+  /* Textbook crop-mark corner on the flashcard (top-left; top-right hosts the audio button) */
+  .crnr{ position:absolute; width:16px; height:16px; border:0 solid rgba(30,41,59,.22); }
+  .crnr-tl{ top:14px; left:14px; border-top-width:1px; border-left-width:1px; }
+  html.dark .crnr{ border-color:rgba(255,255,255,.2); }
+
+  /* Buttons */
+  .btn-primary{ display:inline-flex; align-items:center; gap:.5rem; height:3rem; padding:0 1.6rem; border-radius:9999px;
+    background:#1e293b; color:#fff; font-weight:600; font-size:.875rem; transition:background-color .25s,color .25s,transform .15s; }
+  .btn-primary:hover{ background:#10b981; }
+  .btn-primary:active{ transform:scale(.97); }
+  html.dark .btn-primary{ background:#f8fafc; color:#1e293b; }
+  html.dark .btn-primary:hover{ background:#10b981; color:#fff; }
+
+  .btn-ghost{ display:inline-flex; align-items:center; gap:.5rem; height:3rem; padding:0 1.6rem; border-radius:9999px;
+    border:1px solid rgba(30,41,59,.18); font-weight:600; font-size:.875rem; transition:border-color .25s,color .25s,transform .15s; }
+  .btn-ghost:hover{ border-color:#10b981; color:#10b981; }
+  .btn-ghost:active{ transform:scale(.97); }
+  html.dark .btn-ghost{ border-color:rgba(255,255,255,.22); color:#f8fafc; }
+
+  .btn-reveal{ display:inline-flex; align-items:center; gap:.5rem; height:2.75rem; padding:0 1.75rem; border-radius:9999px;
+    background:#1e293b; color:#fff; font-weight:600; font-size:.875rem; transition:background-color .25s,color .25s,transform .15s; }
+  .btn-reveal:hover{ background:#10b981; }
+  .btn-reveal:active{ transform:scale(.96); }
+  html.dark .btn-reveal{ background:#f8fafc; color:#1e293b; }
+  html.dark .btn-reveal:hover{ background:#10b981; color:#fff; }
+
+  .btn-round{ display:inline-flex; align-items:center; justify-content:center; width:2.75rem; height:2.75rem; border-radius:9999px;
+    border:1px solid rgba(30,41,59,.16); transition:border-color .2s,color .2s,transform .15s,opacity .2s; }
+  .btn-round:hover{ border-color:#10b981; color:#10b981; }
+  .btn-round:active{ transform:scale(.92); }
+  .btn-round:disabled{ opacity:.25; cursor:not-allowed; }
+  html.dark .btn-round{ border-color:rgba(255,255,255,.16); }
+
+  .btn-mini{ display:inline-flex; align-items:center; justify-content:center; width:2rem; height:2rem; border-radius:9999px;
+    border:1px solid rgba(30,41,59,.14); color:rgba(30,41,59,.55); transition:border-color .2s,color .2s,background-color .2s; }
+  .btn-mini:hover{ border-color:#10b981; color:#10b981; }
+  .btn-mini.is-on{ border-color:#10b981; color:#10b981; background:rgba(16,185,129,.1); }
+  html.dark .btn-mini{ border-color:rgba(255,255,255,.15); color:rgba(248,250,252,.55); }
+
+  .icon-btn{ display:inline-flex; align-items:center; justify-content:center; border-radius:9999px;
+    border:1px solid rgba(30,41,59,.14); transition:border-color .2s,color .2s; color:inherit; }
+  .icon-btn:hover{ border-color:rgba(16,185,129,.7); color:#10b981; }
+  html.dark .icon-btn{ border-color:rgba(255,255,255,.15); }
+
+  .eyebrow{ font-size:11px; letter-spacing:.35em; text-transform:uppercase; font-weight:700; color:#10b981; }
+
+  /* Audio corner button — solid pill so it mounts cleanly over the card corner */
+  .speak{ display:inline-flex; align-items:center; justify-content:center; width:2.25rem; height:2.25rem; border-radius:9999px;
+    border:1px solid rgba(16,185,129,.5); color:#10b981; background:#fff; cursor:pointer;
+    box-shadow:0 8px 20px -10px rgba(30,41,59,.45);
+    transition:background-color .2s,color .2s,border-color .2s,transform .15s; }
+  .speak:hover{ background:#10b981; color:#fff; border-color:#10b981; }
+  .speak:active{ transform:scale(.92); }
+  html.dark .speak{ background:#1a212b; box-shadow:0 8px 20px -10px rgba(0,0,0,.55); }
+  @keyframes speakPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(16,185,129,.45) } 70%{ box-shadow:0 0 0 9px rgba(16,185,129,0) } }
+  .speak.on{ animation: speakPulse 1.2s ease-in-out infinite; }
+
+  @keyframes spinIn{ from{ transform:rotate(-120deg) scale(.5); opacity:0 } to{ transform:none; opacity:1 } }
+  .spin-in{ animation: spinIn .35s ease-out; }
+
+  /* Layout helpers — dvh keeps phones correct while the browser toolbar shows/hides */
+  .page-h{ min-height:calc(100vh - 4rem); min-height:calc(100dvh - 4rem); }
+  .card-h{ height:clamp(21rem,56vh,30rem); height:clamp(21rem,56dvh,30rem); }
+  .no-scrollbar{ scrollbar-width:none; -ms-overflow-style:none; }
+  .no-scrollbar::-webkit-scrollbar{ display:none; }
+
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+  }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+</head>
+
+<body class="font-sans bg-porcelain text-ink dark:bg-night dark:text-porcelain antialiased">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ================================================================
+   data.js — mock database, shaped exactly like an API payload.
+   Swap the `api` helpers for real fetch() calls later; nothing
+   else in the app touches hskData directly.
+================================================================ */
+const hskData = {
+  hsk1: {
+    id: "hsk1", label: "HSK 1", hanzi: "一",
+    title: "HSK 1 Standard Course",
+    blurb: "Absolute beginnings — greetings, numbers, family, food and the everyday nouns that carry your first real conversations in Chinese.",
+    lessons: [
+      { id: 1, cn: "你好", title: "Lesson 1: Hello", words: [
+        { id: 1,  hanzi: "你好",   pinyin: "nǐ hǎo",    pos: "Phrase",    english: "Hello" },
+        { id: 2,  hanzi: "你",     pinyin: "nǐ",        pos: "Pronoun",   english: "You" },
+        { id: 3,  hanzi: "我",     pinyin: "wǒ",        pos: "Pronoun",   english: "I; me" },
+        { id: 4,  hanzi: "他",     pinyin: "tā",        pos: "Pronoun",   english: "He; him" },
+        { id: 5,  hanzi: "她",     pinyin: "tā",        pos: "Pronoun",   english: "She; her" },
+        { id: 6,  hanzi: "你们",   pinyin: "nǐ men",    pos: "Pronoun",   english: "You (plural)" },
+        { id: 7,  hanzi: "我们",   pinyin: "wǒ men",    pos: "Pronoun",   english: "We; us" },
+        { id: 8,  hanzi: "他们",   pinyin: "tā men",    pos: "Pronoun",   english: "They; them" },
+        { id: 9,  hanzi: "是",     pinyin: "shì",       pos: "Verb",      english: "To be" },
+        { id: 10, hanzi: "很",     pinyin: "hěn",       pos: "Adverb",    english: "Very" }
+      ]},
+      { id: 2, cn: "数字", title: "Lesson 2: Numbers", words: [
+        { id: 1, hanzi: "一", pinyin: "yī",  pos: "Numeral", english: "One" },
+        { id: 2, hanzi: "二", pinyin: "èr",  pos: "Numeral", english: "Two" },
+        { id: 3, hanzi: "三", pinyin: "sān", pos: "Numeral", english: "Three" },
+        { id: 4, hanzi: "四", pinyin: "sì",  pos: "Numeral", english: "Four" },
+        { id: 5, hanzi: "五", pinyin: "wǔ",  pos: "Numeral", english: "Five" },
+        { id: 6, hanzi: "六", pinyin: "liù", pos: "Numeral", english: "Six" },
+        { id: 7, hanzi: "七", pinyin: "qī",  pos: "Numeral", english: "Seven" },
+        { id: 8, hanzi: "八", pinyin: "bā",  pos: "Numeral", english: "Eight" },
+        { id: 9, hanzi: "九", pinyin: "jiǔ", pos: "Numeral", english: "Nine" },
+        { id:10, hanzi: "十", pinyin: "shí", pos: "Numeral", english: "Ten" }
+      ]},
+      { id: 3, cn: "家人", title: "Lesson 3: Family", words: [
+        { id: 1,  hanzi: "爸爸",  pinyin: "bà ba",     pos: "Noun", english: "Father" },
+        { id: 2,  hanzi: "妈妈",  pinyin: "mā ma",     pos: "Noun", english: "Mother" },
+        { id: 3,  hanzi: "儿子",  pinyin: "ér zi",     pos: "Noun", english: "Son" },
+        { id: 4,  hanzi: "女儿",  pinyin: "nǚ ér",     pos: "Noun", english: "Daughter" },
+        { id: 5,  hanzi: "家",    pinyin: "jiā",       pos: "Noun", english: "Home; family" },
+        { id: 6,  hanzi: "朋友",  pinyin: "péng you",  pos: "Noun", english: "Friend" },
+        { id: 7,  hanzi: "老师",  pinyin: "lǎo shī",   pos: "Noun", english: "Teacher" },
+        { id: 8,  hanzi: "学生",  pinyin: "xué sheng", pos: "Noun", english: "Student" },
+        { id: 9,  hanzi: "先生",  pinyin: "xiān sheng",pos: "Noun", english: "Mr.; sir" },
+        { id: 10, hanzi: "小姐",  pinyin: "xiǎo jie",  pos: "Noun", english: "Miss; young lady" }
+      ]},
+      { id: 4, cn: "时间", title: "Lesson 4: Time", words: [
+        { id: 1,  hanzi: "今天", pinyin: "jīn tiān", pos: "Noun", english: "Today" },
+        { id: 2,  hanzi: "明天", pinyin: "míng tiān",pos: "Noun", english: "Tomorrow" },
+        { id: 3,  hanzi: "昨天", pinyin: "zuó tiān", pos: "Noun", english: "Yesterday" },
+        { id: 4,  hanzi: "现在", pinyin: "xiàn zài", pos: "Noun", english: "Now" },
+        { id: 5,  hanzi: "上午", pinyin: "shàng wǔ", pos: "Noun", english: "Morning (before noon)" },
+        { id: 6,  hanzi: "中午", pinyin: "zhōng wǔ", pos: "Noun", english: "Noon" },
+        { id: 7,  hanzi: "下午", pinyin: "xià wǔ",   pos: "Noun", english: "Afternoon" },
+        { id: 8,  hanzi: "年",   pinyin: "nián",     pos: "Noun", english: "Year" },
+        { id: 9,  hanzi: "月",   pinyin: "yuè",      pos: "Noun", english: "Month" },
+        { id: 10, hanzi: "日",   pinyin: "rì",       pos: "Noun", english: "Day; date" }
+      ]},
+      { id: 5, cn: "饮食", title: "Lesson 5: Food & Drink", words: [
+        { id: 1,  hanzi: "吃",   pinyin: "chī",      pos: "Verb", english: "To eat" },
+        { id: 2,  hanzi: "喝",   pinyin: "hē",       pos: "Verb", english: "To drink" },
+        { id: 3,  hanzi: "苹果", pinyin: "píng guǒ", pos: "Noun", english: "Apple" },
+        { id: 4,  hanzi: "米饭", pinyin: "mǐ fàn",   pos: "Noun", english: "Cooked rice" },
+        { id: 5,  hanzi: "菜",   pinyin: "cài",      pos: "Noun", english: "Dish; vegetable" },
+        { id: 6,  hanzi: "茶",   pinyin: "chá",      pos: "Noun", english: "Tea" },
+        { id: 7,  hanzi: "水",   pinyin: "shuǐ",     pos: "Noun", english: "Water" },
+        { id: 8,  hanzi: "咖啡", pinyin: "kā fēi",   pos: "Noun", english: "Coffee" },
+        { id: 9,  hanzi: "鸡蛋", pinyin: "jī dàn",   pos: "Noun", english: "Egg" },
+        { id: 10, hanzi: "牛奶", pinyin: "niú nǎi",  pos: "Noun", english: "Milk" }
+      ]}
+    ]
+  },
+  hsk2: {
+    id: "hsk2", label: "HSK 2", hanzi: "二",
+    title: "HSK 2 Standard Course",
+    blurb: "Everyday exchanges — routines, shopping, weather and the adjectives you need to describe the world around you.",
+    lessons: [
+      { id: 1, cn: "日常", title: "Lesson 1: Daily Routine", words: [
+        { id: 1,  hanzi: "早上",   pinyin: "zǎo shang",   pos: "Noun",      english: "Early morning" },
+        { id: 2,  hanzi: "晚上",   pinyin: "wǎn shang",   pos: "Noun",      english: "Evening; night" },
+        { id: 3,  hanzi: "时间",   pinyin: "shí jiān",    pos: "Noun",      english: "Time" },
+        { id: 4,  hanzi: "点",     pinyin: "diǎn",        pos: "Measure word", english: "O'clock; point" },
+        { id: 5,  hanzi: "分钟",   pinyin: "fēn zhōng",   pos: "Noun",      english: "Minute" },
+        { id: 6,  hanzi: "星期",   pinyin: "xīng qī",     pos: "Noun",      english: "Week" },
+        { id: 7,  hanzi: "打电话", pinyin: "dǎ diàn huà", pos: "Phrase",    english: "To make a phone call" },
+        { id: 8,  hanzi: "工作",   pinyin: "gōng zuò",    pos: "Verb",      english: "To work; job" },
+        { id: 9,  hanzi: "做",     pinyin: "zuò",         pos: "Verb",      english: "To do; to make" },
+        { id: 10, hanzi: "忙",     pinyin: "máng",        pos: "Adjective", english: "Busy" }
+      ]},
+      { id: 2, cn: "购物", title: "Lesson 2: Shopping", words: [
+        { id: 1,  hanzi: "买东西", pinyin: "mǎi dōng xi", pos: "Phrase",      english: "To go shopping" },
+        { id: 2,  hanzi: "商店",   pinyin: "shāng diàn",  pos: "Noun",        english: "Shop; store" },
+        { id: 3,  hanzi: "钱",     pinyin: "qián",        pos: "Noun",        english: "Money" },
+        { id: 4,  hanzi: "块",     pinyin: "kuài",        pos: "Measure word",english: "Yuan (currency unit)" },
+        { id: 5,  hanzi: "贵",     pinyin: "guì",         pos: "Adjective",   english: "Expensive" },
+        { id: 6,  hanzi: "便宜",   pinyin: "pián yi",     pos: "Adjective",   english: "Cheap; inexpensive" },
+        { id: 7,  hanzi: "买",     pinyin: "mǎi",         pos: "Verb",        english: "To buy" },
+        { id: 8,  hanzi: "卖",     pinyin: "mài",         pos: "Verb",        english: "To sell" },
+        { id: 9,  hanzi: "件",     pinyin: "jiàn",        pos: "Measure word",english: "Piece (for clothing)" },
+        { id: 10, hanzi: "衣服",   pinyin: "yī fu",       pos: "Noun",        english: "Clothes" }
+      ]},
+      { id: 3, cn: "天气", title: "Lesson 3: Weather", words: [
+        { id: 1,  hanzi: "天气", pinyin: "tiān qì", pos: "Noun",        english: "Weather" },
+        { id: 2,  hanzi: "下雨", pinyin: "xià yǔ",  pos: "Verb",        english: "To rain" },
+        { id: 3,  hanzi: "晴",   pinyin: "qíng",    pos: "Adjective",  english: "Sunny; clear" },
+        { id: 4,  hanzi: "冷",   pinyin: "lěng",    pos: "Adjective",  english: "Cold" },
+        { id: 5,  hanzi: "热",   pinyin: "rè",      pos: "Adjective",  english: "Hot" },
+        { id: 6,  hanzi: "走",   pinyin: "zǒu",     pos: "Verb",       english: "To walk" },
+        { id: 7,  hanzi: "坐",   pinyin: "zuò",     pos: "Verb",       english: "To sit" },
+        { id: 8,  hanzi: "到",   pinyin: "dào",     pos: "Verb",       english: "To arrive" },
+        { id: 9,  hanzi: "从",   pinyin: "cóng",    pos: "Preposition",english: "From" },
+        { id: 10, hanzi: "在",   pinyin: "zài",     pos: "Preposition",english: "To be at; in; at" }
+      ]},
+      { id: 4, cn: "描述", title: "Lesson 4: Describing & Comparing", words: [
+        { id: 1,  hanzi: "大",   pinyin: "dà",        pos: "Adjective", english: "Big; large" },
+        { id: 2,  hanzi: "小",   pinyin: "xiǎo",      pos: "Adjective", english: "Small; little" },
+        { id: 3,  hanzi: "新",   pinyin: "xīn",       pos: "Adjective", english: "New" },
+        { id: 4,  hanzi: "旧",   pinyin: "jiù",       pos: "Adjective", english: "Old; used" },
+        { id: 5,  hanzi: "长",   pinyin: "cháng",     pos: "Adjective", english: "Long" },
+        { id: 6,  hanzi: "短",   pinyin: "duǎn",      pos: "Adjective", english: "Short" },
+        { id: 7,  hanzi: "高兴", pinyin: "gāo xìng",  pos: "Adjective", english: "Happy; glad" },
+        { id: 8,  hanzi: "漂亮", pinyin: "piào liang",pos: "Adjective", english: "Beautiful; pretty" },
+        { id: 9,  hanzi: "快",   pinyin: "kuài",      pos: "Adjective", english: "Fast; quick" },
+        { id: 10, hanzi: "慢",   pinyin: "màn",       pos: "Adjective", english: "Slow" }
+      ]}
+    ]
+  },
+  hsk3: {
+    id: "hsk3", label: "HSK 3", hanzi: "三",
+    title: "HSK 3 Standard Course",
+    blurb: "Breaking into real fluency — campus, travel and work vocabulary, plus the words that hold longer conversations together.",
+    lessons: [
+      { id: 1, cn: "校园", title: "Lesson 1: Campus Life", words: [
+        { id: 1, hanzi: "简单", pinyin: "jiǎn dān", pos: "Adjective", english: "Simple; easy" },
+        { id: 2, hanzi: "考试", pinyin: "kǎo shì",  pos: "Noun",      english: "Exam; test" },
+        { id: 3, hanzi: "复习", pinyin: "fù xí",    pos: "Verb",      english: "To review; revise" },
+        { id: 4, hanzi: "成绩", pinyin: "chéng jì", pos: "Noun",      english: "Grade; result" },
+        { id: 5, hanzi: "努力", pinyin: "nǔ lì",    pos: "Verb",      english: "To work hard; strive" },
+        { id: 6, hanzi: "练习", pinyin: "liàn xí",  pos: "Verb",      english: "To practise" },
+        { id: 7, hanzi: "认真", pinyin: "rèn zhēn", pos: "Adjective", english: "Serious; conscientious" },
+        { id: 8, hanzi: "顺利", pinyin: "shùn lì",  pos: "Adjective", english: "Smooth; without problems" }
+      ]},
+      { id: 2, cn: "旅行", title: "Lesson 2: Travel & City", words: [
+        { id: 1, hanzi: "旅行", pinyin: "lǚ xíng",  pos: "Verb",      english: "To travel; trip" },
+        { id: 2, hanzi: "飞机", pinyin: "fēi jī",   pos: "Noun",      english: "Airplane" },
+        { id: 3, hanzi: "火车", pinyin: "huǒ chē",  pos: "Noun",      english: "Train" },
+        { id: 4, hanzi: "出发", pinyin: "chū fā",   pos: "Verb",      english: "To set off; depart" },
+        { id: 5, hanzi: "到达", pinyin: "dào dá",   pos: "Verb",      english: "To arrive" },
+        { id: 6, hanzi: "地图", pinyin: "dì tú",    pos: "Noun",      english: "Map" },
+        { id: 7, hanzi: "著名", pinyin: "zhù míng", pos: "Adjective", english: "Famous" },
+        { id: 8, hanzi: "风景", pinyin: "fēng jǐng",pos: "Noun",      english: "Scenery; landscape" }
+      ]},
+      { id: 3, cn: "工作", title: "Lesson 3: Work & Society", words: [
+        { id: 1, hanzi: "办公室", pinyin: "bàn gōng shì", pos: "Noun", english: "Office" },
+        { id: 2, hanzi: "上班",   pinyin: "shàng bān",    pos: "Verb", english: "To go to work" },
+        { id: 3, hanzi: "下班",   pinyin: "xià bān",      pos: "Verb", english: "To get off work" },
+        { id: 4, hanzi: "电脑",   pinyin: "diàn nǎo",     pos: "Noun", english: "Computer" },
+        { id: 5, hanzi: "环境",   pinyin: "huán jìng",    pos: "Noun", english: "Environment" },
+        { id: 6, hanzi: "发展",   pinyin: "fā zhǎn",      pos: "Verb", english: "To develop" },
+        { id: 7, hanzi: "机会",   pinyin: "jī huì",       pos: "Noun", english: "Opportunity; chance" },
+        { id: 8, hanzi: "成功",   pinyin: "chéng gōng",   pos: "Verb", english: "To succeed; success" }
+      ]}
+    ]
+  },
+  "hsk4": {
+    "id": "hsk4",
+    "label": "HSK 4",
+    "hanzi": "四",
+    "title": "HSK 4 Standard Course",
+    "blurb": "Fluency territory — opinions, work, the internet and modern life, plus the abstract verbs that let you argue, agree and tell stories.",
+    "lessons": [
+      {
+        "id": 1,
+        "cn": "情感",
+        "title": "Lesson 1: Feelings & Impressions",
+        "words": [
+          { "id": 1, "hanzi": "法律", "pinyin": "fǎlǜ", "pos": "Noun", "english": "Law" },
+          { "id": 2, "hanzi": "俩", "pinyin": "liǎ", "pos": "Numeral", "english": "Two, both" },
+          { "id": 3, "hanzi": "印象", "pinyin": "yìnxiàng", "pos": "Noun", "english": "Impression" },
+          { "id": 4, "hanzi": "深", "pinyin": "shēn", "pos": "Adjective", "english": "Deep" },
+          { "id": 5, "hanzi": "熟悉", "pinyin": "shúxī", "pos": "Verb", "english": "To be familiar with" },
+          { "id": 6, "hanzi": "不仅", "pinyin": "bùjǐn", "pos": "Conjunction", "english": "Not only" },
+          { "id": 7, "hanzi": "性格", "pinyin": "xìnggé", "pos": "Noun", "english": "Character, personality" },
+          { "id": 8, "hanzi": "开玩笑", "pinyin": "kāi wánxiào", "pos": "Verb", "english": "To be kidding" },
+          { "id": 9, "hanzi": "从来", "pinyin": "cónglái", "pos": "Adverb", "english": "Always, all along" },
+          { "id": 10, "hanzi": "最好", "pinyin": "zuìhǎo", "pos": "Adverb", "english": "Had better" },
+          { "id": 11, "hanzi": "共同", "pinyin": "gòngtóng", "pos": "Adjective", "english": "Common, shared" },
+          { "id": 12, "hanzi": "适合", "pinyin": "shìhé", "pos": "Verb", "english": "To suit, to fit" },
+          { "id": 13, "hanzi": "幸福", "pinyin": "xìngfú", "pos": "Adjective", "english": "Happy" },
+          { "id": 14, "hanzi": "生活", "pinyin": "shēnghuó", "pos": "Noun/Verb", "english": "Life; to live" },
+          { "id": 15, "hanzi": "刚", "pinyin": "gāng", "pos": "Adverb", "english": "Just, not long" },
+          { "id": 16, "hanzi": "浪漫", "pinyin": "làngmàn", "pos": "Adjective", "english": "Romantic" },
+          { "id": 17, "hanzi": "够", "pinyin": "gòu", "pos": "Verb", "english": "To be enough" },
+          { "id": 18, "hanzi": "缺点", "pinyin": "quēdiǎn", "pos": "Noun", "english": "Shortcoming" },
+          { "id": 19, "hanzi": "接受", "pinyin": "jiēshòu", "pos": "Verb", "english": "To accept" },
+          { "id": 20, "hanzi": "羡慕", "pinyin": "xiànmù", "pos": "Verb", "english": "To envy, to admire" },
+          { "id": 21, "hanzi": "爱情", "pinyin": "àiqíng", "pos": "Noun", "english": "Love (romantic)" },
+          { "id": 22, "hanzi": "星星", "pinyin": "xīngxing", "pos": "Noun", "english": "Star" },
+          { "id": 23, "hanzi": "即使", "pinyin": "jíshǐ", "pos": "Conjunction", "english": "Even if" },
+          { "id": 24, "hanzi": "加班", "pinyin": "jiā bān", "pos": "Verb", "english": "To work overtime" },
+          { "id": 25, "hanzi": "亮", "pinyin": "liàng", "pos": "Verb/Adjective", "english": "To shine, to be lit" },
+          { "id": 26, "hanzi": "感动", "pinyin": "gǎndòng", "pos": "Verb", "english": "To touch, to move" },
+          { "id": 27, "hanzi": "自然", "pinyin": "zìrán", "pos": "Adverb", "english": "Naturally, certainly" },
+          { "id": 28, "hanzi": "原因", "pinyin": "yuányīn", "pos": "Noun", "english": "Reason" },
+          { "id": 29, "hanzi": "互相", "pinyin": "hùxiāng", "pos": "Adverb", "english": "Mutually" },
+          { "id": 30, "hanzi": "吸引", "pinyin": "xīyǐn", "pos": "Verb", "english": "To attract" },
+          { "id": 31, "hanzi": "幽默", "pinyin": "yōumò", "pos": "Adjective", "english": "Humorous" },
+          { "id": 32, "hanzi": "脾气", "pinyin": "píqi", "pos": "Noun", "english": "Temper, disposition" }
+        ]
+      },
+      {
+        "id": 2,
+        "cn": "职场",
+        "title": "Lesson 2: Work & Career",
+        "words": [
+          { "id": 1, "hanzi": "适应", "pinyin": "shìyìng", "pos": "Verb", "english": "To get used to" },
+          { "id": 2, "hanzi": "交", "pinyin": "jiāo", "pos": "Verb", "english": "To make (friends)" },
+          { "id": 3, "hanzi": "平时", "pinyin": "píngshí", "pos": "Noun", "english": "Normal times" },
+          { "id": 4, "hanzi": "逛", "pinyin": "guàng", "pos": "Verb", "english": "To stroll, to roam" },
+          { "id": 5, "hanzi": "短信", "pinyin": "duǎnxìn", "pos": "Noun", "english": "Text message" },
+          { "id": 6, "hanzi": "正好", "pinyin": "zhènghǎo", "pos": "Adverb", "english": "Just in time, just right" },
+          { "id": 7, "hanzi": "聚会", "pinyin": "jùhuì", "pos": "Verb/Noun", "english": "To have a party; get-together" },
+          { "id": 8, "hanzi": "联系", "pinyin": "liánxì", "pos": "Verb", "english": "To contact" },
+          { "id": 9, "hanzi": "差不多", "pinyin": "chàbuduō", "pos": "Adverb", "english": "Almost" },
+          { "id": 10, "hanzi": "专门", "pinyin": "zhuānmén", "pos": "Adverb", "english": "Specially" },
+          { "id": 11, "hanzi": "毕业", "pinyin": "bìyè", "pos": "Verb", "english": "To graduate" },
+          { "id": 12, "hanzi": "麻烦", "pinyin": "máfan", "pos": "Verb/Adjective", "english": "To bother; troublesome" },
+          { "id": 13, "hanzi": "好像", "pinyin": "hǎoxiàng", "pos": "Verb", "english": "As if" },
+          { "id": 14, "hanzi": "重新", "pinyin": "chóngxīn", "pos": "Adverb", "english": "Again, once more" },
+          { "id": 15, "hanzi": "尽管", "pinyin": "jǐnguǎn", "pos": "Conjunction", "english": "Although" },
+          { "id": 16, "hanzi": "真正", "pinyin": "zhēnzhèng", "pos": "Adjective", "english": "True, real" },
+          { "id": 17, "hanzi": "友谊", "pinyin": "yǒuyì", "pos": "Noun", "english": "Friendship" },
+          { "id": 18, "hanzi": "丰富", "pinyin": "fēngfù", "pos": "Verb/Adjective", "english": "To enrich; rich" },
+          { "id": 19, "hanzi": "无聊", "pinyin": "wúliáo", "pos": "Adjective", "english": "Boring" },
+          { "id": 20, "hanzi": "讨厌", "pinyin": "tǎoyàn", "pos": "Verb", "english": "To dislike" },
+          { "id": 21, "hanzi": "却", "pinyin": "què", "pos": "Adverb", "english": "But, yet" },
+          { "id": 22, "hanzi": "周围", "pinyin": "zhōuwéi", "pos": "Noun", "english": "Surrounding" },
+          { "id": 23, "hanzi": "交流", "pinyin": "jiāoliú", "pos": "Verb", "english": "To exchange, to communicate" },
+          { "id": 24, "hanzi": "理解", "pinyin": "lǐjiě", "pos": "Verb", "english": "To understand" },
+          { "id": 25, "hanzi": "镜子", "pinyin": "jìngzi", "pos": "Noun", "english": "Mirror" },
+          { "id": 26, "hanzi": "而", "pinyin": "ér", "pos": "Conjunction", "english": "While, yet" },
+          { "id": 27, "hanzi": "当", "pinyin": "dāng", "pos": "Preposition", "english": "When, just at" },
+          { "id": 28, "hanzi": "困难", "pinyin": "kùnnan", "pos": "Noun/Adjective", "english": "Difficulty; difficult" },
+          { "id": 29, "hanzi": "及时", "pinyin": "jíshí", "pos": "Adverb", "english": "In time" },
+          { "id": 30, "hanzi": "陪", "pinyin": "péi", "pos": "Verb", "english": "To accompany" }
+        ]
+      },
+      {
+        "id": 3,
+        "cn": "网络",
+        "title": "Lesson 3: The Internet Age",
+        "words": [
+          { "id": 1, "hanzi": "挺", "pinyin": "tǐng", "pos": "Adverb", "english": "Quite, rather" },
+          { "id": 2, "hanzi": "紧张", "pinyin": "jǐnzhāng", "pos": "Adjective", "english": "Nervous" },
+          { "id": 3, "hanzi": "信心", "pinyin": "xìnxīn", "pos": "Noun", "english": "Confidence" },
+          { "id": 4, "hanzi": "能力", "pinyin": "nénglì", "pos": "Noun", "english": "Ability, competence" },
+          { "id": 5, "hanzi": "招聘", "pinyin": "zhāopìn", "pos": "Verb", "english": "To recruit" },
+          { "id": 6, "hanzi": "提供", "pinyin": "tígōng", "pos": "Verb", "english": "To provide" },
+          { "id": 7, "hanzi": "负责", "pinyin": "fùzé", "pos": "Verb", "english": "To be in charge of" },
+          { "id": 8, "hanzi": "本来", "pinyin": "běnlái", "pos": "Adverb", "english": "Originally, at first" },
+          { "id": 9, "hanzi": "应聘", "pinyin": "yìngpìn", "pos": "Verb", "english": "To apply for a job" },
+          { "id": 10, "hanzi": "材料", "pinyin": "cáiliào", "pos": "Noun", "english": "Data, material" },
+          { "id": 11, "hanzi": "符合", "pinyin": "fúhé", "pos": "Verb", "english": "To accord with" },
+          { "id": 12, "hanzi": "通知", "pinyin": "tōngzhī", "pos": "Verb/Noun", "english": "To inform; notice" },
+          { "id": 13, "hanzi": "律师", "pinyin": "lǜshī", "pos": "Noun", "english": "Lawyer" },
+          { "id": 14, "hanzi": "专业", "pinyin": "zhuānyè", "pos": "Noun/Adjective", "english": "Major, specialty; professional" },
+          { "id": 15, "hanzi": "另外", "pinyin": "lìngwài", "pos": "Adverb/Conjunction", "english": "Besides, in addition" },
+          { "id": 16, "hanzi": "收入", "pinyin": "shōurù", "pos": "Noun", "english": "Income" },
+          { "id": 17, "hanzi": "咱们", "pinyin": "zánmen", "pos": "Pronoun", "english": "We, us (inclusive)" },
+          { "id": 18, "hanzi": "安排", "pinyin": "ānpái", "pos": "Verb", "english": "To arrange" },
+          { "id": 19, "hanzi": "首先", "pinyin": "shǒuxiān", "pos": "Adverb", "english": "First" },
+          { "id": 20, "hanzi": "正式", "pinyin": "zhèngshì", "pos": "Adjective", "english": "Formal" },
+          { "id": 21, "hanzi": "留", "pinyin": "liú", "pos": "Verb", "english": "To leave (an impression)" },
+          { "id": 22, "hanzi": "其次", "pinyin": "qícì", "pos": "Adverb", "english": "Second, next" },
+          { "id": 23, "hanzi": "诚实", "pinyin": "chéngshí", "pos": "Adjective", "english": "Honest" },
+          { "id": 24, "hanzi": "改变", "pinyin": "gǎibiàn", "pos": "Verb", "english": "To change" },
+          { "id": 25, "hanzi": "感觉", "pinyin": "gǎnjué", "pos": "Noun/Verb", "english": "Feeling; to feel" },
+          { "id": 26, "hanzi": "判断", "pinyin": "pànduàn", "pos": "Verb", "english": "To judge, to decide" },
+          { "id": 27, "hanzi": "顾客", "pinyin": "gùkè", "pos": "Noun", "english": "Customer, client" },
+          { "id": 28, "hanzi": "准时", "pinyin": "zhǔnshí", "pos": "Adjective", "english": "Punctual, on time" },
+          { "id": 29, "hanzi": "不管", "pinyin": "bùguǎn", "pos": "Conjunction", "english": "No matter (what, how)" },
+          { "id": 30, "hanzi": "与", "pinyin": "yǔ", "pos": "Preposition/Conjunction", "english": "With (formal)" },
+          { "id": 31, "hanzi": "约会", "pinyin": "yuēhuì", "pos": "Verb/Noun", "english": "To date, to have an appointment" }
+        ]
+      },
+      {
+        "id": 4,
+        "cn": "职场",
+        "title": "Lesson 4: Work & Career",
+        "words": [
+          { "id": 1, "hanzi": "提", "pinyin": "tí", "pos": "Verb", "english": "To mention; to bring up" },
+          { "id": 2, "hanzi": "以为", "pinyin": "yǐwéi", "pos": "Verb", "english": "To think (often mistakenly)" },
+          { "id": 3, "hanzi": "份", "pinyin": "fèn", "pos": "Measure word", "english": "Part, portion" },
+          { "id": 4, "hanzi": "完全", "pinyin": "wánquán", "pos": "Adverb", "english": "Completely" },
+          { "id": 5, "hanzi": "赚", "pinyin": "zhuàn", "pos": "Verb", "english": "To earn" },
+          { "id": 6, "hanzi": "调查", "pinyin": "diàochá", "pos": "Verb/Noun", "english": "To investigate; survey" },
+          { "id": 7, "hanzi": "原来", "pinyin": "yuánlái", "pos": "Adjective/Adverb", "english": "Original; formerly" },
+          { "id": 8, "hanzi": "计划", "pinyin": "jìhuà", "pos": "Noun/Verb", "english": "Plan; to plan" },
+          { "id": 9, "hanzi": "提前", "pinyin": "tíqián", "pos": "Verb", "english": "To do in advance" },
+          { "id": 10, "hanzi": "保证", "pinyin": "bǎozhèng", "pos": "Verb", "english": "To guarantee" },
+          { "id": 11, "hanzi": "提醒", "pinyin": "tíxǐng", "pos": "Verb", "english": "To remind" },
+          { "id": 12, "hanzi": "乱", "pinyin": "luàn", "pos": "Adjective", "english": "Messy, chaotic" },
+          { "id": 13, "hanzi": "生意", "pinyin": "shēngyi", "pos": "Noun", "english": "Business, trade" },
+          { "id": 14, "hanzi": "谈", "pinyin": "tán", "pos": "Verb", "english": "To talk, to discuss" },
+          { "id": 15, "hanzi": "并", "pinyin": "bìng", "pos": "Adverb", "english": "Actually, definitely" },
+          { "id": 16, "hanzi": "积累", "pinyin": "jīlěi", "pos": "Verb", "english": "To accumulate" },
+          { "id": 17, "hanzi": "经验", "pinyin": "jīngyàn", "pos": "Noun", "english": "Experience" },
+          { "id": 18, "hanzi": "一切", "pinyin": "yíqiè", "pos": "Pronoun", "english": "All, every" },
+          { "id": 19, "hanzi": "按照", "pinyin": "ànzhào", "pos": "Preposition", "english": "According to" },
+          { "id": 20, "hanzi": "成功", "pinyin": "chénggōng", "pos": "Adjective/Verb", "english": "Successful; to succeed" },
+          { "id": 21, "hanzi": "顺利", "pinyin": "shùnlì", "pos": "Adjective", "english": "Smooth" },
+          { "id": 22, "hanzi": "感谢", "pinyin": "gǎnxiè", "pos": "Verb", "english": "To thank" },
+          { "id": 23, "hanzi": "消息", "pinyin": "xiāoxi", "pos": "Noun", "english": "News" },
+          { "id": 24, "hanzi": "按时", "pinyin": "ànshí", "pos": "Adverb", "english": "On time" },
+          { "id": 25, "hanzi": "奖金", "pinyin": "jiǎngjīn", "pos": "Noun", "english": "Bonus" },
+          { "id": 26, "hanzi": "工资", "pinyin": "gōngzī", "pos": "Noun", "english": "Salary" },
+          { "id": 27, "hanzi": "方法", "pinyin": "fāngfǎ", "pos": "Noun", "english": "Method" },
+          { "id": 28, "hanzi": "知识", "pinyin": "zhīshi", "pos": "Noun", "english": "Knowledge" },
+          { "id": 29, "hanzi": "不得不", "pinyin": "bùdébù", "pos": "Adverb", "english": "Have to, have no choice but to" },
+          { "id": 30, "hanzi": "甚至", "pinyin": "shènzhì", "pos": "Conjunction/Adverb", "english": "Even, so far as to" },
+          { "id": 31, "hanzi": "责任", "pinyin": "zérèn", "pos": "Noun", "english": "Responsibility" }
+        ]
+      },
+      {
+        "id": 5,
+        "cn": "购物",
+        "title": "Lesson 5: Shopping & Lifestyle",
+        "words": [
+          { "id": 1, "hanzi": "家具", "pinyin": "jiājù", "pos": "Noun", "english": "Furniture" },
+          { "id": 2, "hanzi": "沙发", "pinyin": "shāfā", "pos": "Noun", "english": "Sofa" },
+          { "id": 3, "hanzi": "打折", "pinyin": "dǎ zhé", "pos": "Verb", "english": "To give a discount" },
+          { "id": 4, "hanzi": "价格", "pinyin": "jiàgé", "pos": "Noun", "english": "Price" },
+          { "id": 5, "hanzi": "质量", "pinyin": "zhìliàng", "pos": "Noun", "english": "Quality" },
+          { "id": 6, "hanzi": "肯定", "pinyin": "kěndìng", "pos": "Adverb/Verb", "english": "Surely, certainly; to affirm" },
+          { "id": 7, "hanzi": "流行", "pinyin": "liúxíng", "pos": "Verb/Adjective", "english": "To be popular" },
+          { "id": 8, "hanzi": "顺便", "pinyin": "shùnbiàn", "pos": "Adverb", "english": "In passing" },
+          { "id": 9, "hanzi": "台", "pinyin": "tái", "pos": "Measure word", "english": "Measure word for machines" },
+          { "id": 10, "hanzi": "光", "pinyin": "guāng", "pos": "Adverb", "english": "Only, merely" },
+          { "id": 11, "hanzi": "实在", "pinyin": "shízài", "pos": "Adverb", "english": "Really" },
+          { "id": 12, "hanzi": "制冷", "pinyin": "zhìlěng", "pos": "Verb", "english": "To refrigerate" },
+          { "id": 13, "hanzi": "效果", "pinyin": "xiàoguǒ", "pos": "Noun", "english": "Effect" },
+          { "id": 14, "hanzi": "现金", "pinyin": "xiànjīn", "pos": "Noun", "english": "Cash" },
+          { "id": 15, "hanzi": "邀请", "pinyin": "yāoqǐng", "pos": "Verb", "english": "To invite" },
+          { "id": 16, "hanzi": "葡萄", "pinyin": "pútao", "pos": "Noun", "english": "Grape" },
+          { "id": 17, "hanzi": "艺术", "pinyin": "yìshù", "pos": "Noun", "english": "Art" },
+          { "id": 18, "hanzi": "广告", "pinyin": "guǎnggào", "pos": "Noun", "english": "Advertisement" },
+          { "id": 19, "hanzi": "味道", "pinyin": "wèidào", "pos": "Noun", "english": "Taste" },
+          { "id": 20, "hanzi": "优点", "pinyin": "yōudiǎn", "pos": "Noun", "english": "Merit" },
+          { "id": 21, "hanzi": "实际", "pinyin": "shíjì", "pos": "Noun/Adjective", "english": "Reality; practical" },
+          { "id": 22, "hanzi": "考虑", "pinyin": "kǎolǜ", "pos": "Verb", "english": "To consider" },
+          { "id": 23, "hanzi": "标准", "pinyin": "biāozhǔn", "pos": "Noun/Adjective", "english": "Standard" },
+          { "id": 24, "hanzi": "样子", "pinyin": "yàngzi", "pos": "Noun", "english": "Look, appearance" },
+          { "id": 25, "hanzi": "年龄", "pinyin": "niánlíng", "pos": "Noun", "english": "Age" },
+          { "id": 26, "hanzi": "浪费", "pinyin": "làngfèi", "pos": "Verb", "english": "To waste" },
+          { "id": 27, "hanzi": "购物", "pinyin": "gòu wù", "pos": "Verb", "english": "To shop" },
+          { "id": 28, "hanzi": "尤其", "pinyin": "yóuqí", "pos": "Adverb", "english": "Especially" },
+          { "id": 29, "hanzi": "受到", "pinyin": "shòudào", "pos": "Verb", "english": "To receive" },
+          { "id": 30, "hanzi": "任何", "pinyin": "rènhé", "pos": "Pronoun", "english": "Any, whatever" },
+          { "id": 31, "hanzi": "寄", "pinyin": "jì", "pos": "Verb", "english": "To mail, to send" }
+        ]
+      },
+      {
+        "id": 6,
+        "cn": "饮食",
+        "title": "Lesson 6: Food & Shopping",
+        "words": [
+          { "id": 1, "hanzi": "果汁", "pinyin": "guǒzhī", "pos": "Noun", "english": "Fruit juice" },
+          { "id": 2, "hanzi": "售货员", "pinyin": "shòuhuòyuán", "pos": "Noun", "english": "Salesperson" },
+          { "id": 3, "hanzi": "袜子", "pinyin": "wàzi", "pos": "Noun", "english": "Socks" },
+          { "id": 4, "hanzi": "打扰", "pinyin": "dǎrǎo", "pos": "Verb", "english": "To disturb" },
+          { "id": 5, "hanzi": "竟然", "pinyin": "jìngrán", "pos": "Adverb", "english": "Unexpectedly" },
+          { "id": 6, "hanzi": "西红柿", "pinyin": "xīhóngshì", "pos": "Noun", "english": "Tomato" },
+          { "id": 7, "hanzi": "百分之", "pinyin": "bǎifēnzhī", "pos": "Numeral", "english": "Percent" },
+          { "id": 8, "hanzi": "倍", "pinyin": "bèi", "pos": "Measure word", "english": "Times, -fold" },
+          { "id": 9, "hanzi": "皮肤", "pinyin": "pífū", "pos": "Noun", "english": "Skin" },
+          { "id": 10, "hanzi": "好处", "pinyin": "hǎochu", "pos": "Noun", "english": "Benefit, advantage" },
+          { "id": 11, "hanzi": "尝", "pinyin": "cháng", "pos": "Verb", "english": "To taste" },
+          { "id": 12, "hanzi": "轻", "pinyin": "qīng", "pos": "Adjective", "english": "Light (weight)" },
+          { "id": 13, "hanzi": "方面", "pinyin": "fāngmiàn", "pos": "Noun", "english": "Aspect" },
+          { "id": 14, "hanzi": "值得", "pinyin": "zhídé", "pos": "Verb", "english": "To be worth" },
+          { "id": 15, "hanzi": "活动", "pinyin": "huódòng", "pos": "Noun", "english": "Activity, event" },
+          { "id": 16, "hanzi": "内", "pinyin": "nèi", "pos": "Noun", "english": "Within, inside" },
+          { "id": 17, "hanzi": "免费", "pinyin": "miǎnfèi", "pos": "Adjective", "english": "Free of charge" },
+          { "id": 18, "hanzi": "修理", "pinyin": "xiūlǐ", "pos": "Verb", "english": "To repair" },
+          { "id": 19, "hanzi": "支持", "pinyin": "zhīchí", "pos": "Verb", "english": "To support" },
+          { "id": 20, "hanzi": "举行", "pinyin": "jǔxíng", "pos": "Verb", "english": "To hold (event)" },
+          { "id": 21, "hanzi": "满", "pinyin": "mǎn", "pos": "Verb/Adjective", "english": "To reach a limit; full" },
+          { "id": 22, "hanzi": "其中", "pinyin": "qízhōng", "pos": "Pronoun", "english": "Among them" },
+          { "id": 23, "hanzi": "小说", "pinyin": "xiǎoshuō", "pos": "Noun", "english": "Novel" },
+          { "id": 24, "hanzi": "会员卡", "pinyin": "huìyuánkǎ", "pos": "Noun", "english": "Membership card" },
+          { "id": 25, "hanzi": "所有", "pinyin": "suǒyǒu", "pos": "Pronoun", "english": "All" },
+          { "id": 26, "hanzi": "获得", "pinyin": "huòdé", "pos": "Verb", "english": "To obtain" },
+          { "id": 27, "hanzi": "情况", "pinyin": "qíngkuàng", "pos": "Noun", "english": "Situation" },
+          { "id": 28, "hanzi": "例如", "pinyin": "lìrú", "pos": "Verb", "english": "For example" },
+          { "id": 29, "hanzi": "举办", "pinyin": "jǔbàn", "pos": "Verb", "english": "To conduct, to hold" },
+          { "id": 30, "hanzi": "各", "pinyin": "gè", "pos": "Pronoun", "english": "Each, every" },
+          { "id": 31, "hanzi": "降低", "pinyin": "jiàngdī", "pos": "Verb", "english": "To lower, to reduce" }
+        ]
+      },
+      {
+        "id": 7,
+        "cn": "身体",
+        "title": "Lesson 7: Body & Health",
+        "words": [
+          { "id": 1, "hanzi": "流血", "pinyin": "liúxiě", "pos": "Verb", "english": "To bleed" },
+          { "id": 2, "hanzi": "擦", "pinyin": "cā", "pos": "Verb", "english": "To wipe" },
+          { "id": 3, "hanzi": "气候", "pinyin": "qìhòu", "pos": "Noun", "english": "Climate" },
+          { "id": 4, "hanzi": "估计", "pinyin": "gūjì", "pos": "Verb", "english": "To estimate, to reckon" },
+          { "id": 5, "hanzi": "咳嗽", "pinyin": "késou", "pos": "Verb", "english": "To cough" },
+          { "id": 6, "hanzi": "严重", "pinyin": "yánzhòng", "pos": "Adjective", "english": "Serious, grave" },
+          { "id": 7, "hanzi": "窗户", "pinyin": "chuānghu", "pos": "Noun", "english": "Window" },
+          { "id": 8, "hanzi": "空气", "pinyin": "kōngqì", "pos": "Noun", "english": "Air" },
+          { "id": 9, "hanzi": "抽烟", "pinyin": "chōu yān", "pos": "Verb", "english": "To smoke" },
+          { "id": 10, "hanzi": "动作", "pinyin": "dòngzuò", "pos": "Noun", "english": "Action, movement" },
+          { "id": 11, "hanzi": "帅", "pinyin": "shuài", "pos": "Adjective", "english": "Handsome" },
+          { "id": 12, "hanzi": "出现", "pinyin": "chūxiàn", "pos": "Verb", "english": "To appear" },
+          { "id": 13, "hanzi": "后悔", "pinyin": "hòuhuǐ", "pos": "Verb", "english": "To regret" },
+          { "id": 14, "hanzi": "来不及", "pinyin": "láibují", "pos": "Verb", "english": "To not have enough time" },
+          { "id": 15, "hanzi": "反对", "pinyin": "fǎnduì", "pos": "Verb", "english": "To oppose" },
+          { "id": 16, "hanzi": "大夫", "pinyin": "dàifu", "pos": "Noun", "english": "Doctor" },
+          { "id": 17, "hanzi": "植物", "pinyin": "zhíwù", "pos": "Noun", "english": "Plant" },
+          { "id": 18, "hanzi": "研究", "pinyin": "yánjiū", "pos": "Verb/Noun", "english": "To study, to research" },
+          { "id": 19, "hanzi": "超过", "pinyin": "chāoguò", "pos": "Verb", "english": "To exceed, to surpass" },
+          { "id": 20, "hanzi": "散步", "pinyin": "sànbù", "pos": "Verb", "english": "To take a walk" },
+          { "id": 21, "hanzi": "指", "pinyin": "zhǐ", "pos": "Verb", "english": "To point to, to refer to" },
+          { "id": 22, "hanzi": "精神", "pinyin": "jīngshén", "pos": "Noun", "english": "Spirit, mind" },
+          { "id": 23, "hanzi": "教授", "pinyin": "jiàoshòu", "pos": "Noun", "english": "Professor" },
+          { "id": 24, "hanzi": "数字", "pinyin": "shùzì", "pos": "Noun", "english": "Number" },
+          { "id": 25, "hanzi": "说明", "pinyin": "shuōmíng", "pos": "Verb", "english": "To explain, to illustrate" },
+          { "id": 26, "hanzi": "要是", "pinyin": "yàoshì", "pos": "Conjunction", "english": "If, supposing" },
+          { "id": 27, "hanzi": "既", "pinyin": "jì", "pos": "Adverb", "english": "Both... (and...)" },
+          { "id": 28, "hanzi": "减肥", "pinyin": "jiǎnféi", "pos": "Verb", "english": "To lose weight" },
+          { "id": 29, "hanzi": "辛苦", "pinyin": "xīnkǔ", "pos": "Adjective", "english": "Hard, toilsome" },
+          { "id": 30, "hanzi": "肚子", "pinyin": "dùzi", "pos": "Noun", "english": "Belly, stomach" },
+          { "id": 31, "hanzi": "感情", "pinyin": "gǎnqíng", "pos": "Noun", "english": "Affection, love" },
+          { "id": 32, "hanzi": "烦恼", "pinyin": "fánnǎo", "pos": "Adjective", "english": "Worried, vexed" },
+          { "id": 33, "hanzi": "掉", "pinyin": "diào", "pos": "Verb", "english": "To fall, to drop" }
+        ]
+      },
+      {
+        "id": 8,
+        "cn": "心情",
+        "title": "Lesson 8: Mood & Relaxation",
+        "words": [
+          { "id": 1, "hanzi": "巧克力", "pinyin": "qiǎokèlì", "pos": "Noun", "english": "Chocolate" },
+          { "id": 2, "hanzi": "亲戚", "pinyin": "qīnqi", "pos": "Noun", "english": "Relative" },
+          { "id": 3, "hanzi": "伤心", "pinyin": "shāngxīn", "pos": "Adjective", "english": "Sad" },
+          { "id": 4, "hanzi": "使", "pinyin": "shǐ", "pos": "Verb", "english": "To make, to cause" },
+          { "id": 5, "hanzi": "心情", "pinyin": "xīnqíng", "pos": "Noun", "english": "Mood" },
+          { "id": 6, "hanzi": "愉快", "pinyin": "yúkuài", "pos": "Adjective", "english": "Happy" },
+          { "id": 7, "hanzi": "景色", "pinyin": "jǐngsè", "pos": "Noun", "english": "Scenery" },
+          { "id": 8, "hanzi": "放松", "pinyin": "fàngsōng", "pos": "Verb", "english": "To relax" },
+          { "id": 9, "hanzi": "压力", "pinyin": "yālì", "pos": "Noun", "english": "Pressure" },
+          { "id": 10, "hanzi": "回忆", "pinyin": "huíyì", "pos": "Verb", "english": "To recall" },
+          { "id": 11, "hanzi": "发生", "pinyin": "fāshēng", "pos": "Verb", "english": "To happen" },
+          { "id": 12, "hanzi": "成为", "pinyin": "chéngwéi", "pos": "Verb", "english": "To become" },
+          { "id": 13, "hanzi": "只要", "pinyin": "zhǐyào", "pos": "Conjunction", "english": "As long as" },
+          { "id": 14, "hanzi": "师傅", "pinyin": "shīfu", "pos": "Noun", "english": "Master worker" },
+          { "id": 15, "hanzi": "大使馆", "pinyin": "dàshǐguǎn", "pos": "Noun", "english": "Embassy" },
+          { "id": 16, "hanzi": "堵车", "pinyin": "dǔchē", "pos": "Verb", "english": "Traffic jam" },
+          { "id": 17, "hanzi": "距离", "pinyin": "jùlí", "pos": "Noun", "english": "Distance" },
+          { "id": 18, "hanzi": "耐心", "pinyin": "nàixīn", "pos": "Noun", "english": "Patience" },
+          { "id": 19, "hanzi": "生命", "pinyin": "shēngmìng", "pos": "Noun", "english": "Life" },
+          { "id": 20, "hanzi": "缺少", "pinyin": "quēshǎo", "pos": "Verb", "english": "To lack" },
+          { "id": 21, "hanzi": "到处", "pinyin": "dàochù", "pos": "Adverb", "english": "Everywhere" },
+          { "id": 22, "hanzi": "态度", "pinyin": "tàidù", "pos": "Noun", "english": "Attitude" },
+          { "id": 23, "hanzi": "因此", "pinyin": "yīncǐ", "pos": "Conjunction", "english": "Therefore" },
+          { "id": 24, "hanzi": "科学", "pinyin": "kēxué", "pos": "Noun", "english": "Science" },
+          { "id": 25, "hanzi": "证明", "pinyin": "zhèngmíng", "pos": "Verb", "english": "To prove" },
+          { "id": 26, "hanzi": "往往", "pinyin": "wǎngwǎng", "pos": "Adverb", "english": "Often" },
+          { "id": 27, "hanzi": "阳光", "pinyin": "yángguāng", "pos": "Adjective/Noun", "english": "Optimistic, sunny; sunlight" },
+          { "id": 28, "hanzi": "积极", "pinyin": "jījí", "pos": "Adjective", "english": "Positive" },
+          { "id": 29, "hanzi": "特点", "pinyin": "tèdiǎn", "pos": "Noun", "english": "Characteristic" },
+          { "id": 30, "hanzi": "浪漫", "pinyin": "làngmàn", "pos": "Adjective", "english": "Romantic" }
+        ]
+      },
+      {
+        "id": 9,
+        "cn": "运动",
+        "title": "Lesson 9: Sports & Persistence",
+        "words": [
+          { "id": 1, "hanzi": "饼干", "pinyin": "bǐnggān", "pos": "Noun", "english": "Biscuit" },
+          { "id": 2, "hanzi": "难道", "pinyin": "nándào", "pos": "Adverb", "english": "Could it be that...?" },
+          { "id": 3, "hanzi": "得", "pinyin": "děi", "pos": "Verb", "english": "Must, have to" },
+          { "id": 4, "hanzi": "坚持", "pinyin": "jiānchí", "pos": "Verb", "english": "To persist" },
+          { "id": 5, "hanzi": "放弃", "pinyin": "fàngqì", "pos": "Verb", "english": "To give up" },
+          { "id": 6, "hanzi": "主意", "pinyin": "zhǔyi", "pos": "Noun", "english": "Idea, plan" },
+          { "id": 7, "hanzi": "网球", "pinyin": "wǎngqiú", "pos": "Noun", "english": "Tennis" },
+          { "id": 8, "hanzi": "国际", "pinyin": "guójì", "pos": "Adjective", "english": "International" },
+          { "id": 9, "hanzi": "轻松", "pinyin": "qīngsōng", "pos": "Adjective", "english": "Relaxed" },
+          { "id": 10, "hanzi": "赢", "pinyin": "yíng", "pos": "Verb", "english": "To win" },
+          { "id": 11, "hanzi": "随便", "pinyin": "suíbiàn", "pos": "Adjective", "english": "Casual, random" },
+          { "id": 12, "hanzi": "汗", "pinyin": "hàn", "pos": "Noun", "english": "Sweat" },
+          { "id": 13, "hanzi": "通过", "pinyin": "tōngguò", "pos": "Preposition/Verb", "english": "Through; to pass" },
+          { "id": 14, "hanzi": "篇", "pinyin": "piān", "pos": "Measure word", "english": "Piece (writing)" },
+          { "id": 15, "hanzi": "作家", "pinyin": "zuòjiā", "pos": "Noun", "english": "Writer" },
+          { "id": 16, "hanzi": "当时", "pinyin": "dāngshí", "pos": "Noun", "english": "At that time" },
+          { "id": 17, "hanzi": "可是", "pinyin": "kěshì", "pos": "Conjunction", "english": "But, however" },
+          { "id": 18, "hanzi": "正确", "pinyin": "zhèngquè", "pos": "Adjective", "english": "Correct" },
+          { "id": 19, "hanzi": "理想", "pinyin": "lǐxiǎng", "pos": "Noun/Adjective", "english": "Ideal" },
+          { "id": 20, "hanzi": "勇敢", "pinyin": "yǒnggǎn", "pos": "Adjective", "english": "Brave" },
+          { "id": 21, "hanzi": "结果", "pinyin": "jiéguǒ", "pos": "Noun", "english": "Result" },
+          { "id": 22, "hanzi": "失败", "pinyin": "shībài", "pos": "Verb", "english": "To fail" },
+          { "id": 23, "hanzi": "过程", "pinyin": "guòchéng", "pos": "Noun", "english": "Process" },
+          { "id": 24, "hanzi": "至少", "pinyin": "zhìshǎo", "pos": "Adverb", "english": "At least" },
+          { "id": 25, "hanzi": "总结", "pinyin": "zǒngjié", "pos": "Verb", "english": "To summarize" },
+          { "id": 26, "hanzi": "取", "pinyin": "qǔ", "pos": "Verb", "english": "To take, to get" },
+          { "id": 27, "hanzi": "经历", "pinyin": "jīnglì", "pos": "Noun/Verb", "english": "Experience; to experience" },
+          { "id": 28, "hanzi": "许多", "pinyin": "xǔduō", "pos": "Adjective", "english": "Many" },
+          { "id": 29, "hanzi": "区别", "pinyin": "qūbié", "pos": "Noun/Verb", "english": "Difference; to distinguish" },
+          { "id": 30, "hanzi": "暂时", "pinyin": "zànshí", "pos": "Adjective", "english": "Temporary" },
+          { "id": 31, "hanzi": "面对", "pinyin": "miànduì", "pos": "Verb", "english": "To face" }
+        ]
+      },
+      {
+        "id": 10,
+        "cn": "生活",
+        "title": "Lesson 10: Life & Society",
+        "words": [
+          { "id": 1, "hanzi": "礼拜天", "pinyin": "lǐbàitiān", "pos": "Noun", "english": "Sunday" },
+          { "id": 2, "hanzi": "空儿", "pinyin": "kòngr", "pos": "Noun", "english": "Free time" },
+          { "id": 3, "hanzi": "母亲", "pinyin": "mǔqīn", "pos": "Noun", "english": "Mother" },
+          { "id": 4, "hanzi": "不过", "pinyin": "búguò", "pos": "Conjunction", "english": "But, however" },
+          { "id": 5, "hanzi": "永远", "pinyin": "yǒngyuǎn", "pos": "Adverb", "english": "Forever" },
+          { "id": 6, "hanzi": "方向", "pinyin": "fāngxiàng", "pos": "Noun", "english": "Direction" },
+          { "id": 7, "hanzi": "优秀", "pinyin": "yōuxiù", "pos": "Adjective", "english": "Excellent" },
+          { "id": 8, "hanzi": "硕士", "pinyin": "shuòshì", "pos": "Noun", "english": "Master's degree" },
+          { "id": 9, "hanzi": "翻译", "pinyin": "fānyì", "pos": "Noun/Verb", "english": "Translator, to translate" },
+          { "id": 10, "hanzi": "确实", "pinyin": "quèshí", "pos": "Adverb", "english": "Truly, indeed" },
+          { "id": 11, "hanzi": "兴奋", "pinyin": "xīngfèn", "pos": "Adjective", "english": "Excited" },
+          { "id": 12, "hanzi": "拉", "pinyin": "lā", "pos": "Verb", "english": "To pull" },
+          { "id": 13, "hanzi": "建议", "pinyin": "jiànyì", "pos": "Noun/Verb", "english": "Suggestion, to suggest" },
+          { "id": 14, "hanzi": "职业", "pinyin": "zhíyè", "pos": "Noun", "english": "Occupation" },
+          { "id": 15, "hanzi": "关键", "pinyin": "guānjiàn", "pos": "Noun/Adjective", "english": "Key point" },
+          { "id": 16, "hanzi": "将来", "pinyin": "jiānglái", "pos": "Noun", "english": "Future" },
+          { "id": 17, "hanzi": "发展", "pinyin": "fāzhǎn", "pos": "Verb", "english": "To develop" },
+          { "id": 18, "hanzi": "躺", "pinyin": "tǎng", "pos": "Verb", "english": "To lie down" },
+          { "id": 19, "hanzi": "困", "pinyin": "kùn", "pos": "Adjective", "english": "Sleepy" },
+          { "id": 20, "hanzi": "经济", "pinyin": "jīngjì", "pos": "Noun", "english": "Economy" },
+          { "id": 21, "hanzi": "条件", "pinyin": "tiáojiàn", "pos": "Noun", "english": "Condition" },
+          { "id": 22, "hanzi": "富", "pinyin": "fù", "pos": "Adjective", "english": "Rich" },
+          { "id": 23, "hanzi": "穷", "pinyin": "qióng", "pos": "Adjective", "english": "Poor" },
+          { "id": 24, "hanzi": "等", "pinyin": "děng", "pos": "Adverb", "english": "Etc., and so on" },
+          { "id": 25, "hanzi": "由于", "pinyin": "yóuyú", "pos": "Preposition/Conjunction", "english": "Due to" },
+          { "id": 26, "hanzi": "比如", "pinyin": "bǐrú", "pos": "Verb", "english": "For example" },
+          { "id": 27, "hanzi": "橡皮", "pinyin": "xiàngpí", "pos": "Noun", "english": "Eraser" },
+          { "id": 28, "hanzi": "糖", "pinyin": "táng", "pos": "Noun", "english": "Sugar, candy" },
+          { "id": 29, "hanzi": "低", "pinyin": "dī", "pos": "Adjective", "english": "Low" },
+          { "id": 30, "hanzi": "答案", "pinyin": "dá'àn", "pos": "Noun", "english": "Answer" }
+        ]
+      },
+      {
+        "id": 11,
+        "cn": "语言",
+        "title": "Lesson 11: Language & Learning",
+        "words": [
+          { "id": 1, "hanzi": "流利", "pinyin": "liúlì", "pos": "Adjective", "english": "Fluent" },
+          { "id": 2, "hanzi": "厉害", "pinyin": "lìhai", "pos": "Adjective", "english": "Awesome, serious" },
+          { "id": 3, "hanzi": "语法", "pinyin": "yǔfǎ", "pos": "Noun", "english": "Grammar" },
+          { "id": 4, "hanzi": "准确", "pinyin": "zhǔnquè", "pos": "Adjective", "english": "Accurate, precise" },
+          { "id": 5, "hanzi": "词语", "pinyin": "cíyǔ", "pos": "Noun", "english": "Word, expression" },
+          { "id": 6, "hanzi": "连", "pinyin": "lián", "pos": "Preposition", "english": "Even" },
+          { "id": 7, "hanzi": "阅读", "pinyin": "yuèdú", "pos": "Verb", "english": "To read" },
+          { "id": 8, "hanzi": "来得及", "pinyin": "láidejí", "pos": "Verb", "english": "There's still time (to do sth.)" },
+          { "id": 9, "hanzi": "复杂", "pinyin": "fùzá", "pos": "Adjective", "english": "Complicated" },
+          { "id": 10, "hanzi": "只好", "pinyin": "zhǐhǎo", "pos": "Adverb", "english": "Cannot but, to be forced to" },
+          { "id": 11, "hanzi": "填空", "pinyin": "tián kòng", "pos": "Verb", "english": "To fill in a blank" },
+          { "id": 12, "hanzi": "猜", "pinyin": "cāi", "pos": "Verb", "english": "To guess" },
+          { "id": 13, "hanzi": "否则", "pinyin": "fǒuzé", "pos": "Conjunction", "english": "Or, otherwise" },
+          { "id": 14, "hanzi": "客厅", "pinyin": "kètīng", "pos": "Noun", "english": "Living room" },
+          { "id": 15, "hanzi": "无论", "pinyin": "wúlùn", "pos": "Conjunction", "english": "Regardless of, no matter (what, how, when, etc.)" },
+          { "id": 16, "hanzi": "杂志", "pinyin": "zázhì", "pos": "Noun", "english": "Magazine" },
+          { "id": 17, "hanzi": "著名", "pinyin": "zhùmíng", "pos": "Adjective", "english": "Famous, well-known" },
+          { "id": 18, "hanzi": "页", "pinyin": "yè", "pos": "Measure word", "english": "Page" },
+          { "id": 19, "hanzi": "增加", "pinyin": "zēngjiā", "pos": "Verb", "english": "To increase, to add" },
+          { "id": 20, "hanzi": "文章", "pinyin": "wénzhāng", "pos": "Noun", "english": "Essay, article" },
+          { "id": 21, "hanzi": "之", "pinyin": "zhī", "pos": "Particle", "english": "Connecting the modifier and the word modified" },
+          { "id": 22, "hanzi": "内容", "pinyin": "nèiróng", "pos": "Noun", "english": "Content" },
+          { "id": 23, "hanzi": "然而", "pinyin": "rán'ér", "pos": "Conjunction", "english": "But, however" },
+          { "id": 24, "hanzi": "看法", "pinyin": "kànfǎ", "pos": "Noun", "english": "Viewpoint, opinion" },
+          { "id": 25, "hanzi": "相同", "pinyin": "xiāngtóng", "pos": "Adjective", "english": "Same" },
+          { "id": 26, "hanzi": "顺序", "pinyin": "shùnxù", "pos": "Noun", "english": "Order, sequence" },
+          { "id": 27, "hanzi": "表示", "pinyin": "biǎoshì", "pos": "Verb", "english": "To express, to indicate" },
+          { "id": 28, "hanzi": "养成", "pinyin": "yǎngchéng", "pos": "Verb", "english": "To develop, to form" },
+          { "id": 29, "hanzi": "同时", "pinyin": "tóngshí", "pos": "Conjunction", "english": "At the same time, meanwhile" },
+          { "id": 30, "hanzi": "精彩", "pinyin": "jīngcǎi", "pos": "Adjective", "english": "Wonderful, splendid" }
+        ]
+      },
+      {
+        "id": 12,
+        "cn": "社会",
+        "title": "Lesson 12: Society & Communication",
+        "words": [
+          { "id": 1, "hanzi": "规定", "pinyin": "guīdìng", "pos": "Noun/Verb", "english": "Rule, regulation; to stipulate" },
+          { "id": 2, "hanzi": "死", "pinyin": "sǐ", "pos": "Adjective", "english": "Rigid, inflexible" },
+          { "id": 3, "hanzi": "可惜", "pinyin": "kěxī", "pos": "Adjective", "english": "Pitiful, regrettable" },
+          { "id": 4, "hanzi": "全部", "pinyin": "quánbù", "pos": "Noun", "english": "All, whole" },
+          { "id": 5, "hanzi": "也许", "pinyin": "yěxǔ", "pos": "Adverb", "english": "Maybe, perhaps" },
+          { "id": 6, "hanzi": "商量", "pinyin": "shāngliang", "pos": "Verb", "english": "To discuss, to consult" },
+          { "id": 7, "hanzi": "并且", "pinyin": "bìngqiě", "pos": "Conjunction", "english": "And" },
+          { "id": 8, "hanzi": "盐", "pinyin": "yán", "pos": "Noun", "english": "Salt" },
+          { "id": 9, "hanzi": "勺子", "pinyin": "sháozi", "pos": "Noun", "english": "Spoon" },
+          { "id": 10, "hanzi": "保护", "pinyin": "bǎohù", "pos": "Verb", "english": "To protect" },
+          { "id": 11, "hanzi": "作用", "pinyin": "zuòyòng", "pos": "Noun", "english": "Function, effect" },
+          { "id": 12, "hanzi": "无法", "pinyin": "wúfǎ", "pos": "Verb", "english": "Cannot, to be unable" },
+          { "id": 13, "hanzi": "无", "pinyin": "wú", "pos": "Verb", "english": "Not have, be without" },
+          { "id": 14, "hanzi": "节", "pinyin": "jié", "pos": "Measure word", "english": "Section, length" },
+          { "id": 15, "hanzi": "详细", "pinyin": "xiángxì", "pos": "Adjective", "english": "Detailed" },
+          { "id": 16, "hanzi": "解释", "pinyin": "jiěshì", "pos": "Verb", "english": "To explain" },
+          { "id": 17, "hanzi": "对于", "pinyin": "duìyú", "pos": "Preposition", "english": "For, to, with regard to" },
+          { "id": 18, "hanzi": "叶子", "pinyin": "yèzi", "pos": "Noun", "english": "Leaf" },
+          { "id": 19, "hanzi": "教育", "pinyin": "jiàoyù", "pos": "Verb/Noun", "english": "To educate; education" },
+          { "id": 20, "hanzi": "使用", "pinyin": "shǐyòng", "pos": "Verb", "english": "To use" },
+          { "id": 21, "hanzi": "语言", "pinyin": "yǔyán", "pos": "Noun", "english": "Language" },
+          { "id": 22, "hanzi": "直接", "pinyin": "zhíjiē", "pos": "Adjective", "english": "Direct, straight" },
+          { "id": 23, "hanzi": "引起", "pinyin": "yǐnqǐ", "pos": "Verb", "english": "To cause, to lead to" },
+          { "id": 24, "hanzi": "误会", "pinyin": "wùhuì", "pos": "Noun/Verb", "english": "Misunderstanding; to misunderstand" },
+          { "id": 25, "hanzi": "友好", "pinyin": "yǒuhǎo", "pos": "Adjective", "english": "Friendly" },
+          { "id": 26, "hanzi": "事半功倍", "pinyin": "shì bàn gōng bèi", "pos": "Idiom", "english": "To achieve twice the result with half the effort" },
+          { "id": 27, "hanzi": "节约", "pinyin": "jiéyuē", "pos": "Verb", "english": "To economize, to save" },
+          { "id": 28, "hanzi": "力气", "pinyin": "lìqi", "pos": "Noun", "english": "Physical strength, effort" },
+          { "id": 29, "hanzi": "相反", "pinyin": "xiāngfǎn", "pos": "Adjective", "english": "On the contrary" },
+          { "id": 30, "hanzi": "任务", "pinyin": "rènwu", "pos": "Noun", "english": "Task, mission" },
+          { "id": 31, "hanzi": "意见", "pinyin": "yìjiàn", "pos": "Noun", "english": "Opinion, suggestion" },
+          { "id": 32, "hanzi": "仔细", "pinyin": "zǐxì", "pos": "Adjective", "english": "Careful, meticulous" },
+          { "id": 33, "hanzi": "达到", "pinyin": "dádào", "pos": "Verb", "english": "To reach, to attain" }
+        ]
+      },
+      {
+        "id": 13,
+        "cn": "文化",
+        "title": "Lesson 13: Culture & Performance",
+        "words": [
+          { "id": 1, "hanzi": "京剧", "pinyin": "jīngjù", "pos": "Noun", "english": "Peking Opera" },
+          { "id": 2, "hanzi": "演员", "pinyin": "yǎnyuán", "pos": "Noun", "english": "Actor/actress" },
+          { "id": 3, "hanzi": "观众", "pinyin": "guānzhòng", "pos": "Noun", "english": "Audience" },
+          { "id": 4, "hanzi": "厚", "pinyin": "hòu", "pos": "Adjective", "english": "Thick, deep" },
+          { "id": 5, "hanzi": "演出", "pinyin": "yǎnchū", "pos": "Verb", "english": "To perform" },
+          { "id": 6, "hanzi": "大概", "pinyin": "dàgài", "pos": "Adverb", "english": "Roughly" },
+          { "id": 7, "hanzi": "来自", "pinyin": "láizì", "pos": "Verb", "english": "Come from" },
+          { "id": 8, "hanzi": "偶尔", "pinyin": "ǒu'ěr", "pos": "Adverb", "english": "Occasionally" },
+          { "id": 9, "hanzi": "吃惊", "pinyin": "chījīng", "pos": "Verb", "english": "To be surprised" },
+          { "id": 10, "hanzi": "基础", "pinyin": "jīchǔ", "pos": "Noun", "english": "Foundation" },
+          { "id": 11, "hanzi": "表演", "pinyin": "biǎoyǎn", "pos": "Verb", "english": "To perform" },
+          { "id": 12, "hanzi": "正常", "pinyin": "zhèngcháng", "pos": "Adjective", "english": "Normal" },
+          { "id": 13, "hanzi": "申请", "pinyin": "shēnqǐng", "pos": "Verb", "english": "To apply for" },
+          { "id": 14, "hanzi": "有趣", "pinyin": "yǒuqù", "pos": "Adjective", "english": "Interesting" },
+          { "id": 15, "hanzi": "开心", "pinyin": "kāixīn", "pos": "Adjective", "english": "Happy" },
+          { "id": 16, "hanzi": "继续", "pinyin": "jìxù", "pos": "Verb", "english": "To continue" },
+          { "id": 17, "hanzi": "由", "pinyin": "yóu", "pos": "Preposition", "english": "By (agent)" },
+          { "id": 18, "hanzi": "讨论", "pinyin": "tǎolùn", "pos": "Verb", "english": "To discuss" },
+          { "id": 19, "hanzi": "大约", "pinyin": "dàyuē", "pos": "Adverb", "english": "Approximately" },
+          { "id": 20, "hanzi": "餐厅", "pinyin": "cāntīng", "pos": "Noun", "english": "Restaurant" },
+          { "id": 21, "hanzi": "纸袋", "pinyin": "zhǐdài", "pos": "Noun", "english": "Paper bag" },
+          { "id": 22, "hanzi": "互联网", "pinyin": "hùliánwǎng", "pos": "Noun", "english": "Internet" },
+          { "id": 23, "hanzi": "进行", "pinyin": "jìnxíng", "pos": "Verb", "english": "To conduct" },
+          { "id": 24, "hanzi": "错误", "pinyin": "cuòwù", "pos": "Adjective/Noun", "english": "Wrong; mistake" },
+          { "id": 25, "hanzi": "随着", "pinyin": "suízhe", "pos": "Preposition", "english": "Along with" },
+          { "id": 26, "hanzi": "十分", "pinyin": "shífēn", "pos": "Adverb", "english": "Very, extremely" },
+          { "id": 27, "hanzi": "普遍", "pinyin": "pǔbiàn", "pos": "Adjective", "english": "Universal" },
+          { "id": 28, "hanzi": "稍微", "pinyin": "shāowēi", "pos": "Adverb", "english": "Slightly" },
+          { "id": 29, "hanzi": "省", "pinyin": "shěng", "pos": "Noun", "english": "Province" }
+        ]
+      },
+      {
+        "id": 14,
+        "cn": "旅行",
+        "title": "Lesson 14: Travel & Environment",
+        "words": [
+          { "id": 1, "hanzi": "出差", "pinyin": "chū chāi", "pos": "Verb", "english": "To go on a business trip" },
+          { "id": 2, "hanzi": "毛巾", "pinyin": "máojīn", "pos": "Noun", "english": "Towel" },
+          { "id": 3, "hanzi": "牙膏", "pinyin": "yágāo", "pos": "Noun", "english": "Toothpaste" },
+          { "id": 4, "hanzi": "重", "pinyin": "zhòng", "pos": "Adjective", "english": "Heavy, weighty" },
+          { "id": 5, "hanzi": "行", "pinyin": "xíng", "pos": "Verb", "english": "To be OK, to be all right" },
+          { "id": 6, "hanzi": "省", "pinyin": "shěng", "pos": "Verb", "english": "To save, to economize" },
+          { "id": 7, "hanzi": "污染", "pinyin": "wūrǎn", "pos": "Verb", "english": "To pollute" },
+          { "id": 8, "hanzi": "卫生间", "pinyin": "wèishēngjiān", "pos": "Noun", "english": "Restroom, bathroom" },
+          { "id": 9, "hanzi": "脏", "pinyin": "zāng", "pos": "Adjective", "english": "Dirty" },
+          { "id": 10, "hanzi": "抱歉", "pinyin": "bàoqiàn", "pos": "Verb", "english": "To be sorry" },
+          { "id": 11, "hanzi": "空", "pinyin": "kōng", "pos": "Adjective", "english": "Empty" },
+          { "id": 12, "hanzi": "盒子", "pinyin": "hézi", "pos": "Noun", "english": "Box, case" },
+          { "id": 13, "hanzi": "扔", "pinyin": "rēng", "pos": "Verb", "english": "To throw away" },
+          { "id": 14, "hanzi": "以", "pinyin": "yǐ", "pos": "Preposition", "english": "Via, by means of" },
+          { "id": 15, "hanzi": "速度", "pinyin": "sùdù", "pos": "Noun", "english": "Speed" },
+          { "id": 16, "hanzi": "地球", "pinyin": "dìqiú", "pos": "Noun", "english": "Earth, globe" },
+          { "id": 17, "hanzi": "既然", "pinyin": "jìrán", "pos": "Conjunction", "english": "Since, as, now that" },
+          { "id": 18, "hanzi": "停", "pinyin": "tíng", "pos": "Verb", "english": "To stop, to cease" },
+          { "id": 19, "hanzi": "得意", "pinyin": "déyì", "pos": "Adjective", "english": "Complacent, gloating" },
+          { "id": 20, "hanzi": "目的", "pinyin": "mùdì", "pos": "Noun", "english": "Aim, purpose" },
+          { "id": 21, "hanzi": "暖", "pinyin": "nuǎn", "pos": "Adjective", "english": "Warm" },
+          { "id": 22, "hanzi": "塑料袋", "pinyin": "sùliàodài", "pos": "Noun", "english": "Plastic bag" },
+          { "id": 23, "hanzi": "于是", "pinyin": "yúshì", "pos": "Conjunction", "english": "Hence, therefore" },
+          { "id": 24, "hanzi": "鼓励", "pinyin": "gǔlì", "pos": "Verb", "english": "To encourage" },
+          { "id": 25, "hanzi": "拒绝", "pinyin": "jùjué", "pos": "Verb", "english": "To refuse, to reject" },
+          { "id": 26, "hanzi": "减少", "pinyin": "jiǎnshǎo", "pos": "Verb", "english": "To reduce, to decrease" },
+          { "id": 27, "hanzi": "数量", "pinyin": "shùliàng", "pos": "Noun", "english": "Quantity, amount" },
+          { "id": 28, "hanzi": "温度", "pinyin": "wēndù", "pos": "Noun", "english": "Temperature" },
+          { "id": 29, "hanzi": "乘坐", "pinyin": "chéngzuò", "pos": "Verb", "english": "To take (a vehicle), to ride (in a vehicle)" },
+          { "id": 30, "hanzi": "丢", "pinyin": "diū", "pos": "Verb", "english": "To throw, to cast" },
+          { "id": 31, "hanzi": "垃圾桶", "pinyin": "lājītǒng", "pos": "Noun", "english": "Dustbin, trash can" },
+          { "id": 32, "hanzi": "美丽", "pinyin": "měilì", "pos": "Adjective", "english": "Beautiful" }
+        ]
+      },
+      {
+        "id": 15,
+        "cn": "家庭",
+        "title": "Lesson 15: Family & Personality",
+        "words": [
+          { "id": 1, "hanzi": "弹钢琴", "pinyin": "tán gāngqín", "pos": "Verb", "english": "To play the piano" },
+          { "id": 2, "hanzi": "棒", "pinyin": "bàng", "pos": "Adjective", "english": "Excellent, great" },
+          { "id": 3, "hanzi": "孙子", "pinyin": "sūnzi", "pos": "Noun", "english": "Grandson" },
+          { "id": 4, "hanzi": "寒假", "pinyin": "hánjià", "pos": "Noun", "english": "Winter vacation" },
+          { "id": 5, "hanzi": "父亲", "pinyin": "fùqīn", "pos": "Noun", "english": "Father" },
+          { "id": 6, "hanzi": "闹钟", "pinyin": "nàozhōng", "pos": "Noun", "english": "Alarm clock" },
+          { "id": 7, "hanzi": "响", "pinyin": "xiǎng", "pos": "Verb", "english": "To sound, to ring" },
+          { "id": 8, "hanzi": "醒", "pinyin": "xǐng", "pos": "Verb", "english": "To wake up" },
+          { "id": 9, "hanzi": "赶", "pinyin": "gǎn", "pos": "Verb", "english": "To rush for" },
+          { "id": 10, "hanzi": "厕所", "pinyin": "cèsuǒ", "pos": "Noun", "english": "Toilet" },
+          { "id": 11, "hanzi": "批评", "pinyin": "pīpíng", "pos": "Verb", "english": "To criticize" },
+          { "id": 12, "hanzi": "弄", "pinyin": "nòng", "pos": "Verb", "english": "To do, to manage" },
+          { "id": 13, "hanzi": "管理", "pinyin": "guǎnlǐ", "pos": "Verb", "english": "To manage" },
+          { "id": 14, "hanzi": "打针", "pinyin": "dǎ zhēn", "pos": "Verb", "english": "To give/get an injection" },
+          { "id": 15, "hanzi": "护士", "pinyin": "hùshi", "pos": "Noun", "english": "Nurse" },
+          { "id": 16, "hanzi": "表扬", "pinyin": "biǎoyáng", "pos": "Verb", "english": "To praise" },
+          { "id": 17, "hanzi": "千万", "pinyin": "qiānwàn", "pos": "Adverb", "english": "Must, be sure to" },
+          { "id": 18, "hanzi": "怀疑", "pinyin": "huáiyí", "pos": "Verb", "english": "To suspect" },
+          { "id": 19, "hanzi": "故意", "pinyin": "gùyì", "pos": "Adverb", "english": "Intentionally" },
+          { "id": 20, "hanzi": "敲", "pinyin": "qiāo", "pos": "Verb", "english": "To knock" },
+          { "id": 21, "hanzi": "整理", "pinyin": "zhěnglǐ", "pos": "Verb", "english": "To tidy up" },
+          { "id": 22, "hanzi": "合适", "pinyin": "héshì", "pos": "Adjective", "english": "Suitable" },
+          { "id": 23, "hanzi": "骗", "pinyin": "piàn", "pos": "Verb", "english": "To deceive" },
+          { "id": 24, "hanzi": "儿童", "pinyin": "értóng", "pos": "Noun", "english": "Children" },
+          { "id": 25, "hanzi": "假", "pinyin": "jiǎ", "pos": "Adjective", "english": "Fake, false" },
+          { "id": 26, "hanzi": "左右", "pinyin": "zuǒyòu", "pos": "Adverb", "english": "Around, approximately" },
+          { "id": 27, "hanzi": "懒", "pinyin": "lǎn", "pos": "Adjective", "english": "Lazy" },
+          { "id": 28, "hanzi": "笨", "pinyin": "bèn", "pos": "Adjective", "english": "Stupid" },
+          { "id": 29, "hanzi": "粗心", "pinyin": "cūxīn", "pos": "Adjective", "english": "Careless" },
+          { "id": 30, "hanzi": "骄傲", "pinyin": "jiāo'ào", "pos": "Adjective", "english": "Arrogant, proud" },
+          { "id": 31, "hanzi": "害羞", "pinyin": "hàixiū", "pos": "Adjective", "english": "Shy" }
+        ]
+      },
+      {
+        "id": 16,
+        "cn": "旅行",
+        "title": "Lesson 16: Travel & Documents",
+        "words": [
+          { "id": 1, "hanzi": "博士", "pinyin": "bóshì", "pos": "Noun", "english": "Doctor (academic degree)" },
+          { "id": 2, "hanzi": "签证", "pinyin": "qiānzhèng", "pos": "Noun", "english": "Visa" },
+          { "id": 3, "hanzi": "报名", "pinyin": "bào míng", "pos": "Verb", "english": "To apply, to sign up" },
+          { "id": 4, "hanzi": "表格", "pinyin": "biǎogé", "pos": "Noun", "english": "Form, table" },
+          { "id": 5, "hanzi": "传真", "pinyin": "chuánzhēn", "pos": "Verb", "english": "To send by fax" },
+          { "id": 6, "hanzi": "号码", "pinyin": "hàomǎ", "pos": "Noun", "english": "Number" },
+          { "id": 7, "hanzi": "参观", "pinyin": "cānguān", "pos": "Verb", "english": "To visit, to look around" },
+          { "id": 8, "hanzi": "激动", "pinyin": "jīdòng", "pos": "Adjective", "english": "Excited, emotional" },
+          { "id": 9, "hanzi": "小伙子", "pinyin": "xiǎohuǒzi", "pos": "Noun", "english": "Young man" },
+          { "id": 10, "hanzi": "记者", "pinyin": "jìzhě", "pos": "Noun", "english": "Journalist, reporter" },
+          { "id": 11, "hanzi": "代表", "pinyin": "dàibiǎo", "pos": "Verb", "english": "To represent, to stand for" },
+          { "id": 12, "hanzi": "恐怕", "pinyin": "kǒngpà", "pos": "Adverb", "english": "(Indicating an estimation) I guess..." },
+          { "id": 13, "hanzi": "失望", "pinyin": "shīwàng", "pos": "Verb", "english": "Disappointed" },
+          { "id": 14, "hanzi": "郊区", "pinyin": "jiāoqū", "pos": "Noun", "english": "Suburb, outskirts" },
+          { "id": 15, "hanzi": "到底", "pinyin": "dàodǐ", "pos": "Adverb", "english": "(Used in questions for emphasis) ... on earth" },
+          { "id": 16, "hanzi": "呀", "pinyin": "ya", "pos": "Particle", "english": "A variant of the interjection \"啊\", used at the end of a question to soften the tone" },
+          { "id": 17, "hanzi": "导游", "pinyin": "dǎoyóu", "pos": "Noun", "english": "Tour guide" },
+          { "id": 18, "hanzi": "礼貌", "pinyin": "lǐmào", "pos": "Noun", "english": "Polite" },
+          { "id": 19, "hanzi": "原谅", "pinyin": "yuánliàng", "pos": "Verb", "english": "To forgive" },
+          { "id": 20, "hanzi": "挂", "pinyin": "guà", "pos": "Verb", "english": "To hang, to put up" },
+          { "id": 21, "hanzi": "同情", "pinyin": "tóngqíng", "pos": "Verb", "english": "To show sympathy for" },
+          { "id": 22, "hanzi": "推", "pinyin": "tuī", "pos": "Verb", "english": "To put off, to postpone" },
+          { "id": 23, "hanzi": "预习", "pinyin": "yùxí", "pos": "Verb", "english": "To prepare lessons before class" },
+          { "id": 24, "hanzi": "重点", "pinyin": "zhòngdiǎn", "pos": "Noun", "english": "Focal point, emphasis" },
+          { "id": 25, "hanzi": "马虎", "pinyin": "mǎhu", "pos": "Adjective", "english": "Careless, slipshod" },
+          { "id": 26, "hanzi": "自信", "pinyin": "zìxìn", "pos": "Adjective", "english": "Self-confident" },
+          { "id": 27, "hanzi": "冷静", "pinyin": "lěngjìng", "pos": "Adjective", "english": "Calm, composed" },
+          { "id": 28, "hanzi": "输", "pinyin": "shū", "pos": "Verb", "english": "To lose, to suffer defeat" },
+          { "id": 29, "hanzi": "重视", "pinyin": "zhòngshì", "pos": "Verb", "english": "To attach importance to" },
+          { "id": 30, "hanzi": "敢", "pinyin": "gǎn", "pos": "Verb", "english": "To dare" },
+          { "id": 31, "hanzi": "尊重", "pinyin": "zūnzhòng", "pos": "Verb", "english": "To respect" }
+        ]
+      },
+      {
+        "id": 17,
+        "cn": "自然",
+        "title": "Lesson 17: Nature & Society",
+        "words": [
+          { "id": 1, "hanzi": "凉快", "pinyin": "liángkuai", "pos": "Adjective", "english": "Pleasantly cool" },
+          { "id": 2, "hanzi": "热闹", "pinyin": "rènao", "pos": "Adjective", "english": "Busy, bustling" },
+          { "id": 3, "hanzi": "云", "pinyin": "yún", "pos": "Noun", "english": "Cloud" },
+          { "id": 4, "hanzi": "广播", "pinyin": "guǎngbō", "pos": "Noun/Verb", "english": "Broadcast, radio program" },
+          { "id": 5, "hanzi": "照", "pinyin": "zhào", "pos": "Verb", "english": "To take a picture, to photograph" },
+          { "id": 6, "hanzi": "倒", "pinyin": "dào", "pos": "Adverb", "english": "Indicates contrast; yet, actually" },
+          { "id": 7, "hanzi": "毛", "pinyin": "máo", "pos": "Noun", "english": "Hair, fur" },
+          { "id": 8, "hanzi": "抱", "pinyin": "bào", "pos": "Verb", "english": "To hold in arms, to hug" },
+          { "id": 9, "hanzi": "干", "pinyin": "gàn", "pos": "Verb", "english": "To do, to act" },
+          { "id": 10, "hanzi": "严格", "pinyin": "yángé", "pos": "Adjective", "english": "Strict, rigorous" },
+          { "id": 11, "hanzi": "难受", "pinyin": "nánshòu", "pos": "Adjective", "english": "Sad, unhappy" },
+          { "id": 12, "hanzi": "趟", "pinyin": "tàng", "pos": "Measure word", "english": "Measure word for round trips" },
+          { "id": 13, "hanzi": "放暑假", "pinyin": "fàng shǔjià", "pos": "Verb", "english": "To be on summer vacation" },
+          { "id": 14, "hanzi": "老虎", "pinyin": "lǎohǔ", "pos": "Noun", "english": "Tiger" },
+          { "id": 15, "hanzi": "入口", "pinyin": "rùkǒu", "pos": "Noun", "english": "Entrance" },
+          { "id": 16, "hanzi": "排队", "pinyin": "pái duì", "pos": "Verb", "english": "To form a line, to line up" },
+          { "id": 17, "hanzi": "活泼", "pinyin": "huópō", "pos": "Adjective", "english": "Lively, vivacious" },
+          { "id": 18, "hanzi": "社会", "pinyin": "shèhuì", "pos": "Noun", "english": "Society" },
+          { "id": 19, "hanzi": "竞争", "pinyin": "jìngzhēng", "pos": "Verb", "english": "To compete" },
+          { "id": 20, "hanzi": "森林", "pinyin": "sēnlín", "pos": "Noun", "english": "Forest" },
+          { "id": 21, "hanzi": "剩", "pinyin": "shèng", "pos": "Verb", "english": "To be left over, to remain" },
+          { "id": 22, "hanzi": "暖和", "pinyin": "nuǎnhuo", "pos": "Adjective", "english": "Warm" },
+          { "id": 23, "hanzi": "海洋", "pinyin": "hǎiyáng", "pos": "Noun", "english": "Sea, ocean" },
+          { "id": 24, "hanzi": "底", "pinyin": "dǐ", "pos": "Noun", "english": "Bottom, base" },
+          { "id": 25, "hanzi": "美人鱼", "pinyin": "Měirényú", "pos": "Noun", "english": "Mermaid" },
+          { "id": 26, "hanzi": "公里", "pinyin": "gōnglǐ", "pos": "Measure word", "english": "Kilometer" },
+          { "id": 27, "hanzi": "仍然", "pinyin": "réngrán", "pos": "Adverb", "english": "Still, yet" },
+          { "id": 28, "hanzi": "排列", "pinyin": "páiliè", "pos": "Verb", "english": "To arrange, to put in order" },
+          { "id": 29, "hanzi": "梦", "pinyin": "mèng", "pos": "Noun", "english": "Dream" }
+        ]
+      },
+      {
+        "id": 18,
+        "cn": "科技",
+        "title": "Lesson 18: Technology & Safety",
+        "words": [
+          { "id": 1, "hanzi": "降落", "pinyin": "jiàngluò", "pos": "Verb", "english": "To descend, to land" },
+          { "id": 2, "hanzi": "火", "pinyin": "huǒ", "pos": "Adjective", "english": "Hot, popular" },
+          { "id": 3, "hanzi": "作者", "pinyin": "zuòzhě", "pos": "Noun", "english": "Author" },
+          { "id": 4, "hanzi": "交通", "pinyin": "jiāotōng", "pos": "Noun", "english": "Traffic, communication" },
+          { "id": 5, "hanzi": "技术", "pinyin": "jìshù", "pos": "Noun", "english": "Technology" },
+          { "id": 6, "hanzi": "是否", "pinyin": "shìfǒu", "pos": "Adverb", "english": "If, whether" },
+          { "id": 7, "hanzi": "秒", "pinyin": "miǎo", "pos": "Measure word", "english": "Second, 1/60 minute" },
+          { "id": 8, "hanzi": "方式", "pinyin": "fāngshì", "pos": "Noun", "english": "Way, mode" },
+          { "id": 9, "hanzi": "受不了", "pinyin": "shòubuliǎo", "pos": "Verb", "english": "Cannot stand, cannot bear" },
+          { "id": 10, "hanzi": "日记", "pinyin": "rìjì", "pos": "Noun", "english": "Diary, journal" },
+          { "id": 11, "hanzi": "安全", "pinyin": "ānquán", "pos": "Adjective", "english": "Safe, secure" },
+          { "id": 12, "hanzi": "密码", "pinyin": "mìmǎ", "pos": "Noun", "english": "Password" },
+          { "id": 13, "hanzi": "允许", "pinyin": "yǔnxǔ", "pos": "Verb", "english": "To allow, to permit" },
+          { "id": 14, "hanzi": "座", "pinyin": "zuò", "pos": "Measure word", "english": "Used for bridges, mountains, buildings, etc." },
+          { "id": 15, "hanzi": "桥", "pinyin": "qiáo", "pos": "Noun", "english": "Bridge" },
+          { "id": 16, "hanzi": "危险", "pinyin": "wēixiǎn", "pos": "Adjective", "english": "Dangerous" },
+          { "id": 17, "hanzi": "接着", "pinyin": "jiēzhe", "pos": "Adverb", "english": "Then, immediately after that" },
+          { "id": 18, "hanzi": "警察", "pinyin": "jǐngchá", "pos": "Noun", "english": "Police" },
+          { "id": 19, "hanzi": "抓", "pinyin": "zhuā", "pos": "Verb", "english": "To catch, to arrest" },
+          { "id": 20, "hanzi": "咸", "pinyin": "xián", "pos": "Adjective", "english": "Salty" },
+          { "id": 21, "hanzi": "矿泉水", "pinyin": "kuàngquánshuǐ", "pos": "Noun", "english": "Mineral water" },
+          { "id": 22, "hanzi": "付款", "pinyin": "fù kuǎn", "pos": "Verb", "english": "To pay a sum of money" },
+          { "id": 23, "hanzi": "举", "pinyin": "jǔ", "pos": "Verb", "english": "To give, to enumerate" },
+          { "id": 24, "hanzi": "迷路", "pinyin": "mí lù", "pos": "Verb", "english": "To lose one's way" },
+          { "id": 25, "hanzi": "地址", "pinyin": "dìzhǐ", "pos": "Noun", "english": "Address" },
+          { "id": 26, "hanzi": "地点", "pinyin": "dìdiǎn", "pos": "Noun", "english": "Place, site" },
+          { "id": 27, "hanzi": "世纪", "pinyin": "shìjì", "pos": "Noun", "english": "Century" },
+          { "id": 28, "hanzi": "邮局", "pinyin": "yóujú", "pos": "Noun", "english": "Post office" },
+          { "id": 29, "hanzi": "收", "pinyin": "shōu", "pos": "Verb", "english": "To receive" },
+          { "id": 30, "hanzi": "信封", "pinyin": "xìnfēng", "pos": "Noun", "english": "Envelope" },
+          { "id": 31, "hanzi": "网站", "pinyin": "wǎngzhàn", "pos": "Noun", "english": "Website" },
+          { "id": 32, "hanzi": "信息", "pinyin": "xìnxī", "pos": "Noun", "english": "News, information" }
+        ]
+      },
+      {
+        "id": 19,
+        "cn": "生活",
+        "title": "Lesson 19: Daily Life & Activities",
+        "words": [
+          { "id": 1, "hanzi": "学期", "pinyin": "xuéqī", "pos": "Noun", "english": "Term, semester" },
+          { "id": 2, "hanzi": "出生", "pinyin": "chūshēng", "pos": "Verb", "english": "To be born" },
+          { "id": 3, "hanzi": "性别", "pinyin": "xìngbié", "pos": "Noun", "english": "Sex, gender" },
+          { "id": 4, "hanzi": "道歉", "pinyin": "dào qiàn", "pos": "Verb", "english": "To apologize" },
+          { "id": 5, "hanzi": "打印", "pinyin": "dǎyìn", "pos": "Verb", "english": "To print out" },
+          { "id": 6, "hanzi": "复印", "pinyin": "fùyìn", "pos": "Verb", "english": "To photocopy, to xerox" },
+          { "id": 7, "hanzi": "饺子", "pinyin": "jiǎozi", "pos": "Noun", "english": "Jiaozi, dumpling" },
+          { "id": 8, "hanzi": "刀", "pinyin": "dāo", "pos": "Noun", "english": "Knife" },
+          { "id": 9, "hanzi": "破", "pinyin": "pò", "pos": "Adjective", "english": "Broken, torn" },
+          { "id": 10, "hanzi": "脱", "pinyin": "tuō", "pos": "Verb", "english": "To take off" },
+          { "id": 11, "hanzi": "理发", "pinyin": "lǐ fà", "pos": "Verb", "english": "To get a haircut" },
+          { "id": 12, "hanzi": "包子", "pinyin": "bāozi", "pos": "Noun", "english": "Steamed stuffed bun" },
+          { "id": 13, "hanzi": "零钱", "pinyin": "língqián", "pos": "Noun", "english": "Small change" },
+          { "id": 14, "hanzi": "打招呼", "pinyin": "dǎ zhāohu", "pos": "Verb", "english": "To greet, to say hello" },
+          { "id": 15, "hanzi": "戴", "pinyin": "dài", "pos": "Verb", "english": "To wear (accessories)" },
+          { "id": 16, "hanzi": "眼镜", "pinyin": "yǎnjìng", "pos": "Noun", "english": "Glasses, spectacles" },
+          { "id": 17, "hanzi": "舞蹈", "pinyin": "wǔdǎo", "pos": "Noun", "english": "Dance" },
+          { "id": 18, "hanzi": "国籍", "pinyin": "guójí", "pos": "Noun", "english": "Nationality, citizenship" },
+          { "id": 19, "hanzi": "抬", "pinyin": "tái", "pos": "Verb", "english": "To lift, to raise" },
+          { "id": 20, "hanzi": "胳膊", "pinyin": "gēbo", "pos": "Noun", "english": "Arm" },
+          { "id": 21, "hanzi": "转", "pinyin": "zhuǎn", "pos": "Verb", "english": "To turn, to shift" },
+          { "id": 22, "hanzi": "租", "pinyin": "zū", "pos": "Verb", "english": "To rent, to lease" },
+          { "id": 23, "hanzi": "吵", "pinyin": "chǎo", "pos": "Adjective", "english": "Noisy" },
+          { "id": 24, "hanzi": "厨房", "pinyin": "chúfáng", "pos": "Noun", "english": "Kitchen" },
+          { "id": 25, "hanzi": "房东", "pinyin": "fángdōng", "pos": "Noun", "english": "Landlord/landlady" },
+          { "id": 26, "hanzi": "占线", "pinyin": "zhànxiàn", "pos": "Verb", "english": "(Of a telephone line) to be busy" },
+          { "id": 27, "hanzi": "功夫", "pinyin": "gōngfu", "pos": "Noun", "english": "Kung fu" },
+          { "id": 28, "hanzi": "乒乓球", "pinyin": "pīngpāngqiú", "pos": "Noun", "english": "Table tennis, ping-pong" },
+          { "id": 29, "hanzi": "羽毛球", "pinyin": "yǔmáoqiú", "pos": "Noun", "english": "Badminton" },
+          { "id": 30, "hanzi": "场", "pinyin": "chǎng", "pos": "Measure word", "english": "Used for sports or recreational events etc." },
+          { "id": 31, "hanzi": "禁止", "pinyin": "jìnzhǐ", "pos": "Verb", "english": "To prohibit, to forbid" },
+          { "id": 32, "hanzi": "座位", "pinyin": "zuòwèi", "pos": "Noun", "english": "Seat" }
+        ]
+      },
+      {
+        "id": 20,
+        "cn": "旅行",
+        "title": "Lesson 20: Travel & Celebration",
+        "words": [
+          { "id": 1, "hanzi": "加油站", "pinyin": "jiāyóuzhàn", "pos": "Noun", "english": "Gas station" },
+          { "id": 2, "hanzi": "航班", "pinyin": "hángbān", "pos": "Noun", "english": "Scheduled flight" },
+          { "id": 3, "hanzi": "推迟", "pinyin": "tuīchí", "pos": "Verb", "english": "To postpone, to delay" },
+          { "id": 4, "hanzi": "高速公路", "pinyin": "gāosù gōnglù", "pos": "Noun", "english": "Expressway" },
+          { "id": 5, "hanzi": "登机牌", "pinyin": "dēngjīpái", "pos": "Noun", "english": "Boarding pass" },
+          { "id": 6, "hanzi": "首都", "pinyin": "shǒudū", "pos": "Noun", "english": "Capital (of a country)" },
+          { "id": 7, "hanzi": "旅行", "pinyin": "lǚxíng", "pos": "Verb", "english": "To travel, to tour" },
+          { "id": 8, "hanzi": "怪", "pinyin": "guài", "pos": "Adverb", "english": "Rather, quite" },
+          { "id": 9, "hanzi": "可怜", "pinyin": "kělián", "pos": "Adjective", "english": "Pitiable, poor" },
+          { "id": 10, "hanzi": "对面", "pinyin": "duìmiàn", "pos": "Noun", "english": "Opposite, across" },
+          { "id": 11, "hanzi": "烤鸭", "pinyin": "kǎoyā", "pos": "Noun", "english": "Roast duck" },
+          { "id": 12, "hanzi": "祝贺", "pinyin": "zhùhè", "pos": "Verb", "english": "To congratulate" },
+          { "id": 13, "hanzi": "合格", "pinyin": "hégé", "pos": "Adjective", "english": "Qualified, up to standard" },
+          { "id": 14, "hanzi": "干杯", "pinyin": "gān bēi", "pos": "Verb", "english": "To drink a toast" },
+          { "id": 15, "hanzi": "民族", "pinyin": "mínzú", "pos": "Noun", "english": "Nationality, ethnic group" },
+          { "id": 16, "hanzi": "打扮", "pinyin": "dǎban", "pos": "Verb", "english": "To dress up, to deck out" },
+          { "id": 17, "hanzi": "笑话", "pinyin": "xiàohua", "pos": "Noun", "english": "Joke" },
+          { "id": 18, "hanzi": "存", "pinyin": "cún", "pos": "Verb", "english": "To store, to keep" },
+          { "id": 19, "hanzi": "钥匙", "pinyin": "yàoshi", "pos": "Noun", "english": "Key" },
+          { "id": 20, "hanzi": "究竟", "pinyin": "jiūjìng", "pos": "Adverb", "english": "Exactly (used in questions for emphasis)" },
+          { "id": 21, "hanzi": "棵", "pinyin": "kē", "pos": "Measure word", "english": "Used for plants" },
+          { "id": 22, "hanzi": "汤", "pinyin": "tāng", "pos": "Noun", "english": "Soup" },
+          { "id": 23, "hanzi": "对话", "pinyin": "duìhuà", "pos": "Verb", "english": "To have a dialogue" },
+          { "id": 24, "hanzi": "普通话", "pinyin": "pǔtōnghuà", "pos": "Noun", "english": "Mandarin Chinese" },
+          { "id": 25, "hanzi": "小吃", "pinyin": "xiǎochī", "pos": "Noun", "english": "Small and cheap dishes" },
+          { "id": 26, "hanzi": "收拾", "pinyin": "shōushi", "pos": "Verb", "english": "To put in order, to pack" },
+          { "id": 27, "hanzi": "出发", "pinyin": "chūfā", "pos": "Verb", "english": "To depart, to set off" },
+          { "id": 28, "hanzi": "辣", "pinyin": "là", "pos": "Adjective", "english": "Hot, spicy" },
+          { "id": 29, "hanzi": "香", "pinyin": "xiāng", "pos": "Adjective", "english": "Fragrant, scented" },
+          { "id": 30, "hanzi": "酸", "pinyin": "suān", "pos": "Adjective", "english": "Sour, tart" }
+        ]
+      }
+    ]
+  }
+};
+
+/* ================================================================
+   HSK 4 study data (generated from the supplied PDFs)
+   hskFreq    : hanzi -> [rank in the 1,200-word list, times seen in 27 real exams]
+   hskGrammar : level -> lesson id -> grammar points (pattern, structure, examples)
+================================================================ */
+const hskFreq = {"的":[1,4690],"了":[2,2461],"是":[3,1571],"我":[4,1498],"你":[5,1270],"很":[6,1037],"有":[7,1030],"什么":[8,840],"在":[9,767],"他":[10,764],"问":[11,761],"人":[12,736],"去":[13,730],"好":[14,678],"要":[15,617],"我们":[16,611],"都":[17,599],"不":[18,578],"题":[19,564],"就":[20,522],"也":[21,463],"吗":[22,450],"可以":[23,426],"吧":[24,402],"对":[25,392],"分":[26,391],"会":[27,388],"现在":[28,386],"看":[29,378],"和":[30,368],"多":[31,359],"到":[32,358],"她":[33,356],"时间":[34,340],"做":[35,324],"没":[36,317],"自己":[37,300],"想":[38,298],"给":[39,293],"今天":[40,288],"把":[41,288],"考试":[42,288],"您":[43,277],"让":[44,274],"大家":[45,273],"还":[46,272],"根据":[47,271],"喜欢":[48,267],"能":[49,249],"更":[50,246],"得":[51,241],"分钟":[52,234],"开始":[53,223],"请":[54,221],"知道":[55,216],"觉得":[56,206],"这":[57,203],"电视":[58,202],"上":[59,201],"广告":[60,199],"别人":[61,196],"下午":[62,191],"来":[63,191],"工作":[64,189],"怎么":[65,187],"怎么样":[66,185],"听":[67,184],"时候":[68,183],"主要":[69,179],"一":[70,169],"买":[71,164],"明天":[72,163],"里":[73,162],"点":[74,161],"正确":[75,158],"吃":[76,157],"所以":[77,155],"写":[78,155],"孩子":[79,155],"生活":[80,149],"参加":[81,143],"应该":[82,142],"那":[83,141],"可能":[84,141],"问题":[85,140],"关于":[86,140],"再":[87,138],"银行":[88,136],"最":[89,136],"非常":[90,133],"小":[91,133],"它":[92,133],"会议":[93,132],"太":[94,132],"为什么":[95,130],"小时":[96,128],"意思":[97,128],"呢":[98,128],"不管":[99,125],"啊":[100,121],"个":[101,121],"才":[102,119],"朋友":[103,116],"机场":[104,115],"说话":[105,112],"中国":[106,112],"欢迎":[107,111],"东西":[108,111],"又":[109,106],"大":[110,106],"发":[111,105],"事情":[112,104],"新":[113,103],"如果":[114,102],"这儿":[115,102],"重要":[116,102],"材料":[117,101],"需要":[118,101],"用":[119,101],"一会儿":[120,99],"因为":[121,99],"等":[122,97],"打算":[123,96],"找":[124,95],"一共":[125,95],"已经":[126,95],"只要":[127,94],"公司":[128,94],"钱":[129,93],"哪儿":[130,93],"注意":[131,92],"下":[132,91],"被":[133,91],"告诉":[134,90],"身体":[135,90],"成功":[136,89],"与":[137,88],"汉语":[138,87],"结束":[139,86],"北京":[140,86],"发现":[141,85],"比":[142,85],"月":[143,85],"加油站":[144,84],"书":[145,84],"比较":[146,83],"一直":[147,83],"过":[148,83],"陪":[149,82],"从":[150,82],"还是":[151,82],"地":[152,82],"年":[153,82],"阅读":[154,82],"原因":[155,81],"少":[156,81],"地方":[157,81],"历史":[158,81],"浪费":[159,80],"而":[160,79],"先":[161,79],"别":[162,77],"容易":[163,77],"推迟":[164,76],"最好":[165,76],"快乐":[166,75],"希望":[167,75],"幸福":[168,75],"爱":[169,75],"读":[170,75],"二":[171,75],"三":[172,75],"一起":[173,74],"着":[174,74],"一定":[175,73],"走":[176,73],"为":[177,73],"节目":[178,72],"经验":[179,72],"交流":[180,72],"几":[181,71],"坚持":[182,71],"环境":[183,71],"放心":[184,70],"部分":[185,70],"完成":[186,70],"改变":[187,70],"活动":[188,70],"刚才":[189,69],"准备":[190,69],"获得":[191,69],"谢谢":[192,69],"份":[193,68],"半":[194,68],"谈":[195,68],"选择":[196,68],"信用卡":[197,67],"快":[198,67],"但是":[199,67],"学习":[200,67],"幽默":[201,66],"乒乓球":[202,66],"起来":[203,66],"经常":[204,65],"错":[205,65],"习惯":[206,65],"国家":[207,65],"那儿":[208,65],"可是":[209,63],"谁":[210,63],"其中":[211,62],"要求":[212,62],"比赛":[213,62],"穿":[214,62],"有趣":[215,61],"复印":[216,60],"家":[217,60],"影响":[218,60],"表扬":[219,60],"平时":[220,59],"当":[221,59],"心情":[222,59],"语言":[223,59],"认为":[224,58],"却":[225,58],"特别":[226,58],"每":[227,58],"遇到":[228,58],"填空":[229,58],"通过":[230,57],"休息":[231,57],"许多":[232,57],"了解":[233,57],"坐":[234,57],"发展":[235,57],"儿子":[236,56],"能力":[237,56],"水平":[238,55],"计划":[239,55],"桥":[240,55],"好像":[241,54],"学校":[242,54],"高":[243,54],"晚上":[244,54],"而且":[245,53],"经理":[246,53],"带":[247,53],"真":[248,53],"音乐":[249,52],"毕业":[250,52],"虽然":[251,52],"性格":[252,52],"努力":[253,52],"跟":[254,52],"尊重":[255,52],"批评":[256,52],"学生":[257,52],"缺点":[258,52],"情况":[259,51],"考虑":[260,51],"最近":[261,51],"专业":[262,50],"老师":[263,50],"其实":[264,50],"女儿":[265,50],"减少":[266,50],"文化":[267,50],"开":[268,49],"活泼":[269,49],"联系":[270,49],"两":[271,49],"提前":[272,49],"以后":[273,49],"飞机":[274,49],"帮助":[275,49],"手机":[276,49],"方便":[277,49],"提供":[278,49],"天气":[279,49],"教授":[280,48],"使":[281,48],"全部":[282,48],"方法":[283,48],"正在":[284,48],"顺序":[285,48],"为了":[286,48],"昨天":[287,48],"马上":[288,48],"只":[289,48],"压力":[290,47],"简单":[291,47],"结果":[292,47],"往往":[293,47],"房间":[294,46],"机会":[295,46],"清楚":[296,46],"知识":[297,46],"拿":[298,46],"像":[299,46],"认识":[300,46],"对话":[301,46],"介绍":[302,45],"判断":[303,45],"总是":[304,45],"放弃":[305,45],"张":[306,45],"电影":[307,45],"看法":[308,45],"内容":[309,45],"意见":[310,44],"冷":[311,44],"地铁":[312,44],"温度":[313,44],"减肥":[314,44],"讲":[315,44],"挺":[316,44],"提高":[317,44],"爱情":[318,44],"麻烦":[319,43],"害羞":[320,43],"同学":[321,43],"坏":[322,43],"出发":[323,43],"骄傲":[324,43],"失败":[325,43],"保护":[326,43],"运动":[327,43],"顺利":[328,42],"好处":[329,42],"以前":[330,42],"紧张":[331,42],"一般":[332,42],"完":[333,42],"质量":[334,42],"送":[335,42],"京剧":[336,42],"小说":[337,42],"顾客":[338,42],"消息":[339,42],"导游":[340,41],"过去":[341,41],"堵车":[342,41],"态度":[343,41],"换":[344,41],"相信":[345,41],"使用":[346,41],"决定":[347,41],"多少":[348,41],"衣服":[349,41],"解决":[350,41],"搬":[351,41],"免费":[352,40],"提醒":[353,40],"旅游":[354,40],"翻译":[355,40],"不过":[356,40],"吸引":[357,40],"句子":[358,40],"总结":[359,40],"过程":[360,40],"邻居":[361,40],"向":[362,40],"拒绝":[363,40],"洗":[364,40],"合适":[365,39],"自行车":[366,39],"沙发":[367,39],"迟到":[368,39],"上午":[369,39],"十分":[370,39],"印象":[371,39],"密码":[372,39],"演员":[373,39],"误会":[374,39],"喝":[375,39],"颜色":[376,39],"阳光":[377,39],"哭":[378,39],"周末":[379,38],"俩":[380,38],"满":[381,38],"表演":[382,38],"马虎":[383,38],"标准":[384,38],"熟悉":[385,38],"高兴":[386,38],"感觉":[387,38],"抽烟":[388,38],"适应":[389,38],"锻炼":[390,38],"观众":[391,38],"世界":[392,38],"五":[393,38],"妻子":[394,38],"适合":[395,38],"城市":[396,38],"社会":[397,38],"出差":[398,37],"邀请":[399,37],"扔":[400,37],"理想":[401,37],"一样":[402,37],"困难":[403,37],"年龄":[404,37],"教育":[405,37],"烦恼":[406,37],"超市":[407,37],"咱们":[408,37],"早上":[409,37],"电脑":[410,37],"经济":[411,37],"第一":[412,37],"通知":[413,36],"抱歉":[414,36],"耐心":[415,36],"完全":[416,36],"漂亮":[417,36],"健康":[418,36],"医院":[419,36],"支持":[420,36],"调查":[421,36],"丢":[422,36],"或者":[423,36],"交通":[424,36],"医生":[425,36],"离":[426,36],"任务":[427,36],"报名":[428,36],"速度":[429,36],"方面":[430,36],"游泳":[431,36],"星期":[432,36],"路":[433,36],"礼貌":[434,35],"辛苦":[435,35],"不仅":[436,35],"丰富":[437,35],"当然":[438,35],"排列":[439,35],"价格":[440,35],"收入":[441,35],"聪明":[442,35],"空气":[443,35],"网球":[444,35],"重视":[445,35],"引起":[446,35],"放":[447,35],"理解":[448,35],"对不起":[449,35],"成绩":[450,35],"说明":[451,35],"日记":[452,35],"父亲":[453,35],"愉快":[454,34],"舒服":[455,34],"讨论":[456,34],"座位":[457,34],"开玩笑":[458,34],"文章":[459,34],"关系":[460,34],"气候":[461,34],"笑话":[462,34],"结婚":[463,34],"其他":[464,34],"办法":[465,34],"缺少":[466,34],"成熟":[467,34],"植物":[468,34],"元":[469,34],"失望":[470,33],"热情":[471,33],"肚子":[472,33],"关键":[473,33],"司机":[474,33],"同事":[475,33],"感冒":[476,33],"经历":[477,33],"警察":[478,33],"原谅":[479,33],"肯定":[480,33],"宾馆":[481,33],"解释":[482,33],"水":[483,33],"号":[484,33],"整理":[485,32],"来得及":[486,32],"骑":[487,32],"安排":[488,32],"对面":[489,32],"弄":[490,32],"精彩":[491,32],"凉快":[492,32],"吃惊":[493,32],"效果":[494,32],"脾气":[495,32],"购物":[496,32],"味道":[497,32],"直接":[498,32],"变化":[499,32],"复杂":[500,32],"奶奶":[501,32],"安全":[502,32],"最后":[503,32],"表示":[504,32],"先生":[505,32],"忘记":[506,32],"杂志":[507,32],"聊天":[508,32],"优点":[509,32],"起飞":[510,32],"地球":[511,32],"真正":[512,32],"笑":[513,32],"民族":[514,32],"积累":[515,31],"加班":[516,31],"准时":[517,31],"恐怕":[518,31],"擦":[519,31],"附近":[520,31],"信心":[521,31],"差不多":[522,31],"正式":[523,31],"钥匙":[524,31],"另外":[525,31],"收拾":[526,31],"校长":[527,31],"浪漫":[528,31],"由":[529,31],"窗户":[530,31],"便宜":[531,31],"后悔":[532,31],"忙":[533,31],"按时":[534,31],"流行":[535,31],"见面":[536,31],"鼓励":[537,31],"规定":[538,31],"长城":[539,31],"作用":[540,31],"感情":[541,31],"电梯":[542,31],"爸爸":[543,31],"安静":[544,30],"律师":[545,30],"担心":[546,30],"着急":[547,30],"公园":[548,30],"发生":[549,30],"所有":[550,30],"打折":[551,30],"接受":[552,30],"轻松":[553,30],"关心":[554,30],"因此":[555,30],"羡慕":[556,30],"礼物":[557,30],"网站":[558,30],"儿童":[559,30],"及时":[560,30],"叫":[561,30],"塑料袋":[562,30],"增加":[563,30],"必须":[564,30],"森林":[565,30],"眼睛":[566,30],"生气":[567,30],"丈夫":[568,30],"北方":[569,30],"热闹":[570,29],"友好":[571,29],"继续":[572,29],"记者":[573,29],"原来":[574,29],"伤心":[575,29],"来不及":[576,29],"没关系":[577,29],"签证":[578,29],"难过":[579,29],"估计":[580,29],"按照":[581,29],"爷爷":[582,29],"航班":[583,29],"出":[584,29],"打电话":[585,29],"故事":[586,29],"长":[587,29],"妈妈":[588,29],"生日":[589,29],"诚实":[590,28],"仔细":[591,28],"博士":[592,28],"友谊":[593,28],"无聊":[594,28],"职业":[595,28],"养成":[596,28],"勇敢":[597,28],"弹钢琴":[598,28],"法律":[599,28],"留学":[600,28],"看见":[601,28],"即使":[602,28],"商量":[603,28],"大概":[604,28],"成为":[605,28],"招聘":[606,28],"正好":[607,28],"汤":[608,28],"详细":[609,28],"举办":[610,28],"值得":[611,28],"住":[612,28],"懂":[613,28],"打扰":[614,27],"暂时":[615,27],"演出":[616,27],"然后":[617,27],"粗心":[618,27],"约会":[619,27],"记得":[620,27],"负责":[621,27],"严重":[622,27],"区别":[623,27],"火车站":[624,27],"小姐":[625,27],"方向":[626,27],"行":[627,27],"赚":[628,27],"超过":[629,27],"主动":[630,27],"受到":[631,27],"指":[632,27],"菜":[633,27],"饺子":[634,27],"叶子":[635,27],"厉害":[636,26],"打扮":[637,26],"感动":[638,26],"教室":[639,26],"中午":[640,26],"中文":[641,26],"周围":[642,26],"奇怪":[643,26],"巧克力":[644,26],"广播":[645,26],"条件":[646,26],"积极":[647,26],"站":[648,26],"管理":[649,26],"艺术":[650,26],"乘坐":[651,26],"信任":[652,26],"有名":[653,26],"感谢":[654,26],"饮料":[655,26],"声音":[656,26],"新闻":[657,26],"兴趣":[658,26],"互相":[659,26],"卖":[660,26],"岁":[661,26],"报道":[662,26],"数字":[663,26],"复习":[664,26],"块":[665,26],"空调":[666,25],"冷静":[667,25],"道歉":[668,25],"重新":[669,25],"工资":[670,25],"洗衣机":[671,25],"确实":[672,25],"认真":[673,25],"参观":[674,25],"著名":[675,25],"上班":[676,25],"出现":[677,25],"叔叔":[678,25],"同意":[679,25],"回忆":[680,25],"当地":[681,25],"旁边":[682,25],"相反":[683,25],"短":[684,25],"将来":[685,25],"可惜":[686,25],"甚至":[687,25],"讨厌":[688,25],"风景":[689,25],"报纸":[690,25],"课":[691,25],"马":[692,25],"表达":[693,25],"办公室":[694,24],"图书馆":[695,24],"得意":[696,24],"力气":[697,24],"地址":[698,24],"大使馆":[699,24],"护士":[700,24],"亲戚":[701,24],"瘦":[702,24],"祝贺":[703,24],"乱":[704,24],"任何":[705,24],"兴奋":[706,24],"大夫":[707,24],"实在":[708,24],"稍微":[709,24],"连":[710,24],"家具":[711,24],"小心":[712,24],"当时":[713,24],"打扫":[714,24],"激动":[715,24],"特点":[716,24],"出租车":[717,24],"害怕":[718,24],"无论":[719,24],"出生":[720,24],"打针":[721,24],"上网":[722,24],"母亲":[723,24],"节约":[724,24],"西红柿":[725,24],"猜":[726,24],"突然":[727,23],"垃圾桶":[728,23],"尤其":[729,23],"由于":[730,23],"年轻":[731,23],"生命":[732,23],"共同":[733,23],"危险":[734,23],"反对":[735,23],"本来":[736,23],"满意":[737,23],"照片":[738,23],"证明":[739,23],"准确":[740,23],"弟弟":[741,23],"竞争":[742,23],"妹妹":[743,23],"作者":[744,23],"老":[745,23],"进行":[746,23],"逛":[747,23],"暖和":[748,22],"优秀":[749,22],"咸":[750,22],"好吃":[751,22],"样子":[752,22],"生病":[753,22],"请假":[754,22],"难受":[755,22],"从来":[756,22],"例如":[757,22],"售货员":[758,22],"数量":[759,22],"新鲜":[760,22],"污染":[761,22],"竟然":[762,22],"跳舞":[763,22],"个子":[764,22],"怀疑":[765,22],"照顾":[766,22],"随便":[767,22],"首先":[768,22],"商店":[769,22],"愿意":[770,22],"桌子":[771,22],"水果":[772,22],"睡觉":[773,22],"饼干":[774,22],"回答":[775,22],"甜":[776,22],"国际":[777,22],"呀":[778,21],"尽管":[779,21],"爱好":[780,21],"申请":[781,21],"至少":[782,21],"重点":[783,21],"严格":[784,21],"以为":[785,21],"否则":[786,21],"永远":[787,21],"自然":[788,21],"公共汽车":[789,21],"前面":[790,21],"动作":[791,21],"大约":[792,21],"干净":[793,21],"服务员":[794,21],"行李箱":[795,21],"随着":[796,21],"咳嗽":[797,21],"旧":[798,21],"符合":[799,21],"难":[800,21],"哪":[801,21],"理发":[802,21],"距离":[803,21],"皮肤":[804,21],"辣":[805,21],"票":[806,21],"茶":[807,21],"放暑假":[808,20],"饿":[809,20],"作业":[810,20],"做生意":[811,20],"几乎":[812,20],"到底":[813,20],"厨房":[814,20],"骗":[815,20],"喂":[816,20],"帮忙":[817,20],"普通话":[818,20],"疼":[819,20],"破":[820,20],"不但":[821,20],"厚":[822,20],"寒假":[823,20],"接":[824,20],"研究生":[825,20],"仍然":[826,20],"袜子":[827,20],"贵":[828,20],"镜子":[829,20],"降低":[830,20],"楼":[831,20],"食品":[832,20],"饭馆":[833,20],"动物":[834,20],"孙子":[835,20],"公里":[836,20],"市场":[837,20],"梦":[838,20],"试":[839,20],"专门":[840,19],"主意":[841,19],"到处":[842,19],"顺便":[843,19],"保证":[844,19],"允许":[845,19],"客人":[846,19],"眼镜":[847,19],"笔记本":[848,19],"精神":[849,19],"蛋糕":[850,19],"语法":[851,19],"躺":[852,19],"也许":[853,19],"信":[854,19],"手表":[855,19],"挂":[856,19],"掉":[857,19],"毛巾":[858,19],"冰箱":[859,19],"奖金":[860,19],"明白":[861,19],"相同":[862,19],"裙子":[863,19],"海洋":[864,19],"孤单":[865,18],"干燥":[866,18],"羽毛球":[867,18],"下雨":[868,18],"数学":[869,18],"正常":[870,18],"传真":[871,18],"可爱":[872,18],"打印":[873,18],"热":[874,18],"硕士":[875,18],"黄":[876,18],"字":[877,18],"词典":[878,18],"湿润":[879,18],"现代":[880,18],"葡萄":[881,18],"赢":[882,18],"包":[883,18],"十":[884,18],"长江":[885,18],"鸡蛋":[886,18],"筷子":[887,18],"爬山":[888,17],"究竟":[889,17],"除了":[890,17],"刚刚":[891,17],"唱歌":[892,17],"留":[893,17],"目的":[894,17],"美丽":[895,17],"基础":[896,17],"电子邮件":[897,17],"代表":[898,17],"后来":[899,17],"地图":[900,17],"师傅":[901,17],"帽子":[902,17],"盒子":[903,17],"种":[904,17],"范围":[905,17],"雪":[906,17],"亚洲":[907,17],"号码":[908,17],"太阳":[909,17],"照相机":[910,17],"近":[911,17],"六":[912,17],"花":[913,17],"老虎":[914,17],"护照":[915,16],"普遍":[916,16],"并且":[917,16],"牙膏":[918,16],"不得不":[919,16],"同情":[920,16],"哥哥":[921,16],"懒":[922,16],"戴":[923,16],"本":[924,16],"游戏":[925,16],"限制":[926,16],"矮":[927,16],"脏":[928,16],"输":[929,16],"远":[930,16],"门":[931,16],"一切":[932,16],"流利":[933,16],"逐渐":[934,16],"增长":[935,16],"汗":[936,16],"裤子":[937,16],"词语":[938,16],"一边":[939,16],"举行":[940,16],"发烧":[941,15],"散步":[942,15],"些":[943,15],"借":[944,15],"困":[945,15],"干":[946,15],"技术":[947,15],"累":[948,15],"组织":[949,15],"跑步":[950,15],"低":[951,15],"去年":[952,15],"合格":[953,15],"胖":[954,15],"表格":[955,15],"进":[956,15],"于是":[957,15],"工具":[958,15],"抬":[959,15],"药":[960,15],"左边":[961,15],"班":[962,15],"首都":[963,15],"苦":[964,15],"刷牙":[965,15],"偶尔":[966,14],"取":[967,14],"检查":[968,14],"集合":[969,14],"修":[970,14],"性别":[971,14],"洗手间":[972,14],"禁止":[973,14],"经过":[974,14],"入口":[975,14],"千万":[976,14],"打篮球":[977,14],"日":[978,14],"起床":[979,14],"轻":[980,14],"酸":[981,14],"假":[982,14],"姐姐":[983,14],"尝":[984,14],"腿":[985,14],"右边":[986,14],"苹果":[987,14],"制造":[988,14],"耳朵":[989,14],"节日":[990,14],"受不了":[991,13],"然而":[992,13],"请客":[993,13],"各":[994,13],"树":[995,13],"难道":[996,13],"香蕉":[997,13],"慢":[998,13],"阿姨":[999,13],"场":[1000,13],"米":[1001,13],"画":[1002,13],"久":[1003,13],"熊猫":[1004,13],"既然":[1005,12],"内":[1006,12],"科学":[1007,12],"租":[1008,12],"衬衫":[1009,12],"面包":[1010,12],"口":[1011,12],"实际":[1012,12],"盐":[1013,12],"祝":[1014,12],"糖":[1015,12],"牛奶":[1016,12],"以":[1017,12],"月亮":[1018,12],"层":[1019,12],"鸟":[1020,12],"底":[1021,11],"果汁":[1022,11],"离开":[1023,11],"练习":[1024,11],"责任":[1025,11],"香":[1026,11],"只好":[1027,11],"差":[1028,11],"面条":[1029,11],"笨":[1030,11],"铅笔":[1031,11],"女人":[1032,11],"其次":[1033,10],"名字":[1034,10],"啤酒":[1035,10],"扩大":[1036,10],"终于":[1037,10],"踢足球":[1038,10],"交":[1039,10],"可怜":[1040,10],"回":[1041,10],"季节":[1042,10],"白":[1043,10],"盘子":[1044,10],"高级":[1045,10],"条":[1046,10],"洗澡":[1047,10],"穷":[1048,10],"握手":[1049,10],"公斤":[1050,10],"越":[1051,10],"段":[1052,10],"不客气":[1053,9],"咖啡":[1054,9],"寄":[1055,9],"脱":[1056,9],"关":[1057,9],"台":[1058,9],"鱼":[1059,9],"抱":[1060,9],"西瓜":[1061,9],"刮风":[1062,8],"嘴":[1063,8],"帅":[1064,8],"教":[1065,8],"极其":[1066,8],"深":[1067,8],"碗":[1068,8],"窄":[1069,8],"脸":[1070,8],"页":[1071,8],"预习":[1072,8],"饱":[1073,8],"鼻子":[1074,8],"剩":[1075,8],"后面":[1076,8],"四":[1077,8],"故意":[1078,8],"算":[1079,8],"趟":[1080,8],"外":[1081,8],"狮子":[1082,8],"鞋":[1083,8],"干杯":[1084,8],"收":[1085,8],"次":[1086,8],"灯":[1087,8],"富":[1088,8],"世纪":[1089,7],"体育":[1090,7],"八":[1091,7],"篇":[1092,7],"组成":[1093,7],"绿":[1094,7],"鼓掌":[1095,7],"之":[1096,7],"件":[1097,7],"伞":[1098,7],"吵":[1099,7],"街道":[1100,7],"农村":[1101,7],"猴子":[1102,7],"河":[1103,7],"狗":[1104,7],"九":[1105,6],"再见":[1106,6],"头发":[1107,6],"年级":[1108,6],"往":[1109,6],"整齐":[1110,6],"极":[1111,6],"流泪":[1112,6],"玩":[1113,6],"红":[1114,6],"羊肉":[1115,6],"花园":[1116,6],"醒":[1117,6],"中间":[1118,6],"位":[1119,6],"敲":[1120,6],"杯子":[1121,6],"椅子":[1122,6],"够":[1123,6],"敢":[1124,6],"七":[1125,5],"云":[1126,5],"亮":[1127,5],"响":[1128,5],"宽":[1129,5],"暗":[1130,5],"瓶子":[1131,5],"省":[1132,5],"米饭":[1133,5],"菜单":[1134,5],"光":[1135,5],"圆":[1136,5],"访问":[1137,5],"包括":[1138,5],"万":[1139,4],"东":[1140,4],"人民币":[1141,4],"代替":[1142,4],"南":[1143,4],"字典":[1144,4],"忽然":[1145,4],"棵":[1146,4],"渴":[1147,4],"脚":[1148,4],"遍":[1149,4],"撞":[1150,4],"草":[1151,4],"零":[1152,4],"黑板":[1153,4],"停止":[1154,3],"双":[1155,3],"多么":[1156,3],"姓":[1157,3],"拉":[1158,3],"无":[1159,3],"死":[1160,3],"辆":[1161,3],"男人":[1162,3],"倍":[1163,2],"冬":[1164,2],"千":[1165,2],"晴":[1166,2],"果然":[1167,2],"火":[1168,2],"船":[1169,2],"蓝":[1170,2],"角":[1171,2],"刀":[1172,1],"墙":[1173,1],"夏":[1174,1],"推":[1175,1],"朵":[1176,1],"猪":[1177,1],"百":[1178,1],"秋":[1179,1],"西":[1180,1],"软":[1181,1],"阴":[1182,1],"黑":[1183,1],"…分之…":[1184,0],"亿":[1185,0],"刻":[1186,0],"反应":[1187,0],"座":[1188,0],"断":[1189,0],"春":[1190,0],"猫":[1191,0],"硬":[1192,0],"答案":[1193,0],"群":[1194,0],"血":[1195,0],"顿":[1196,0]};
+const hskGrammar = { hsk4: {"1":[{"n":1,"title":"不仅......也/还/而且...... (Not only... but also...)","desc":"Indicates a further meaning in addition to the first clause.","structure":"不仅 A + 也/而且 B","examples":[{"zh":"他不仅足球踢得好，性格也不错。","py":"Tā bùjǐn zúqiú tī de hǎo, xìnggé yě búcuò.","en":"He not only plays football well, but his personality is also good."},{"zh":"我打算去云南玩儿，听说那边不仅很美，而且人也非常热情。","py":"Wǒ dǎsuàn qù Yúnnán wánr, tīngshuō nàbian bùjǐn hěn měi, érqiě rén yě fēicháng rèqíng.","en":"I plan to go to Yunnan. I heard that not only is it beautiful there, but the people are also very enthusiastic."}]},{"n":2,"title":"从来 (Always / Never)","desc":"Indicates something has always been like this from the past to present. Usually used in negative sentences (with 没 or 不).","structure":"从来 + 不/没 + Verb","examples":[{"zh":"老张这个人开会从来不迟到。","py":"Lǎo Zhāng zhège rén kāihuì cónglái bù chídào.","en":"Lao Zhang never arrives late for meetings."},{"zh":"虽然我们认识的时间不长，但我从来没这么快乐过。","py":"Suīrán wǒmen rènshi de shíjiān bù cháng, dàn wǒ cónglái méi zhème kuàilèguo.","en":"Although we haven't known each other long, I have never been this happy."}]},{"n":3,"title":"刚 (Just) vs. 刚才 (Just now)","desc":"刚 is an adverb indicating an action happened a short time ago (cannot be negated). 刚才 is a noun referencing the time shortly before speaking (can be negated).","structure":"刚 + Verb / 刚才 + Statement","examples":[{"zh":"我和丈夫刚结婚的时候...","py":"Wǒ hé zhàngfu gāng jiéhūn de shíhou...","en":"When my husband and I just got married..."},{"zh":"刚才你去哪儿了？","py":"Gāngcái nǐ qù nǎr le?","en":"Where did you go just now?"}]},{"n":4,"title":"即使......也...... (Even if... still...)","desc":"Indicates a hypothetical concession or something that already exists, but the result remains unchanged.","structure":"即使 A + 也 B","examples":[{"zh":"即使晚上加班到零点，自己家里也还亮着灯。","py":"Jíshǐ wǎnshang jiā bān dào líng diǎn, zìjǐ jiā li yě hái liàngzhe dēng.","en":"Even if I work overtime until midnight, the light is still on in my home."},{"zh":"你应该多回家看看老人，即使只是跟他们吃吃饭、聊聊天，他们也会觉得很幸福。","py":"Nǐ yīnggāi duō huí jiā kànkan lǎorén, jíshǐ zhǐshì gēn tāmen chīchīfàn, liáoliáo tiān, tāmen yě huì juéde hěn xìngfú.","en":"You should go home often to see the elderly. Even if you just eat and chat with them, they will feel very happy."}]},{"n":5,"title":"(在)......上 (On / In terms of)","desc":"Indicates scope or aspect.","structure":"在 + Noun + 上","examples":[{"zh":"两个人共同生活，不仅需要浪漫的爱情，更需要在性格上互相吸引。","py":"Liǎng ge rén gòngtóng shēnghuó, bùjǐn xūyào làngmàn de àiqíng, gèng xūyào zài xìnggé shang hùxiāng xīyǐn.","en":"Living together not only requires romantic love, but more importantly mutual attraction in terms of personality."},{"zh":"你觉得北方和南方在饮食上有什么不同？","py":"Nǐ juéde běifāng hé nánfāng zài yǐnshí shang yǒu shénme bùtóng?","en":"What differences do you think exist between the North and South in terms of diet?"}]}],"2":[{"n":1,"title":"正好 (zhènghǎo)","desc":"Usage A (Adj): 'Just right' (condition, time, position, etc.). Usage B (Adv): 'Just in time' or 'happen to'.","structure":"正好 + Verb","examples":[{"zh":"你来得正好，我的钱包不见了，借我点儿钱吧。","py":"Nǐ lái de zhènghǎo, wǒ de qiánbāo bújiàn le, jiè wǒ diǎnr qián ba.","en":"You came just in time; my wallet is gone, lend me some money."},{"zh":"我们下午要去踢足球，正好一起去吧。","py":"Wǒmen xiàwǔ yào qù tī zúqiú, zhènghǎo yìqǐ qù ba.","en":"We are going to play football this afternoon; it just so happens (you can) go with us."}]},{"n":2,"title":"差不多 (chàbuduō)","desc":"Usage A (Adjective): 'Similar' or 'about the same'. Usage B (Adverb): 'Almost' or 'nearly'.","structure":"差不多 + Number","examples":[{"zh":"这两个词的意思差不多。","py":"Zhè liǎng ge cí de yìsi chàbuduō.","en":"The meanings of these two words are about the same."},{"zh":"班里同学来了差不多一半儿。","py":"Bān li tóngxué láile chàbuduō yíbànr.","en":"Almost half of the classmates came."}]},{"n":3,"title":"尽管 (jǐnguǎn)","desc":"Conjunction meaning 'although'. Often used with 但是, 可是, 却, or 还是.","structure":"尽管 A + 还是/但是 B","examples":[{"zh":"尽管已经毕业这么多年，我们还是经常联系的。","py":"Jǐnguǎn yǐjīng bìyè zhème duō nián, wǒmen háishi jīngcháng liánxì de.","en":"Although we graduated so many years ago, we still contact each other often."}]},{"n":4,"title":"却 (què)","desc":"Adverb indicating a transition or contrast ('but/yet'). Milder than 但是. Must be placed after the subject and before the verb.","structure":"Subject + 却 + Verb","examples":[{"zh":"这是一个新电影，我却看过。","py":"Zhè shì yí ge xīn diànyǐng, wǒ què kànguo.","en":"This is a new movie, yet I have seen it."},{"zh":"他虽然不一定让人讨厌，但是却很难跟人交朋友。","py":"Tā suīrán bù yídìng ràng rén tǎoyàn, dànshì què hěn nán gēn rén jiāo péngyou.","en":"Although he isn't necessarily annoying, it is yet hard for him to make friends."}]},{"n":5,"title":"而 (ér)","desc":"Conjunction used in written Chinese to connect two clauses. It can indicate a contrast ('while', 'but').","structure":"Clause A + 而 + Clause B","examples":[{"zh":"现在的房子很贵，而买房的人很多。","py":"Xiànzài de fángzi hěn guì, ér mǎi fáng de rén hěn duō.","en":"Houses are expensive now, yet there are many buyers."},{"zh":"有些人觉得......而我的理解是......","py":"Yǒuxiē rén juéde... ér wǒ de lǐjiě shì...","en":"Some think... while my understanding is..."}]}],"3":[{"n":1,"title":"挺 (tǐng)","desc":"Adverb meaning 'quite' or 'rather'. Common in spoken Chinese.","structure":"挺 + Adjective + 的","examples":[{"zh":"他的汉语说得挺好的。","py":"Tā de Hànyǔ shuō de tǐng hǎo de.","en":"He speaks Chinese quite well."},{"zh":"这个房子挺不错的。","py":"Zhège fángzi tǐng búcuò de.","en":"This house is quite nice."}]},{"n":2,"title":"本来 (běnlái)","desc":"Usage A: 'Original' or 'at first', indicating a change. Usage B: Indicates something goes without saying.","structure":"本来 + Verb","examples":[{"zh":"我本来不会开车，但现在开得特别好。","py":"Wǒ běnlái bú huì kāichē, dàn xiànzài kāi de tèbié hǎo.","en":"Originally I couldn't drive, but now I drive very well."}]},{"n":3,"title":"另外 (lìngwài)","desc":"Pronoun, adverb, or conjunction meaning 'other', 'besides', or 'in addition'.","structure":"另外 + Statement","examples":[{"zh":"我学的是法律，另外，收入也不错。","py":"Wǒ xué de shì fǎlǜ, lìngwài, shōurù yě búcuò.","en":"I studied law; besides, the income is not bad."}]},{"n":4,"title":"首先......其次...... (shǒuxiān... qícì...)","desc":"Used in written Chinese or formal speech to enumerate items: 'First... Second...'.","structure":"首先 A + 其次 B","examples":[{"zh":"首先，要穿正式的衣服......其次，应聘时不要紧张。","py":"Shǒuxiān, yào chuān zhèngshì de yīfu... qícì, yìngpìn shí búyào jǐnzhāng.","en":"First, wear formal clothes... Second, don't be nervous during the application."}]},{"n":5,"title":"不管 (bùguǎn)","desc":"Conjunction 'no matter'. Indicates result remains same regardless of circumstances.","structure":"不管 A + 都/也 B","examples":[{"zh":"不管是上课、上班，还是与别人约会，准时都非常重要。","py":"Bùguǎn shì shàngkè, shàngbān, háishi yǔ biéren yuēhuì, zhǔnshí dōu fēicháng zhòngyào.","en":"No matter if it is class, work, or a date, punctuality is very important."}]}],"4":[{"n":1,"title":"以为 (yǐwéi)","desc":"Verb meaning ‘to think (mistakenly)’ or ‘to assume’. Indicates a mistaken belief or judgment that turns out to be wrong.","structure":"Subject + 以为 + (Statement)","examples":[{"zh":"我以为他今天不来了，没想到他还是来了。","py":"Wǒ yǐwéi tā jīntiān bù lái le, méi xiǎngdào tā háishi lái le.","en":"I thought he wasn’t coming today, but unexpectedly he still came."},{"zh":"你不要以为这是一件很容易的事。","py":"Nǐ búyào yǐwéi zhè shì yí jiàn hěn róngyì de shì.","en":"Don’t think this is an easy thing."}]},{"n":2,"title":"原来 (yuánlái)","desc":"Usage A (Noun/Adjective): ‘Original’ or ‘former’. Usage B (Adverb): ‘It turns out’ or ‘so’, indicating a realization after discovering the truth.","structure":"原来 + Statement","examples":[{"zh":"原来你也是这个学校的学生啊！","py":"Yuánlái nǐ yě shì zhège xuéxiào de xuéshēng a!","en":"So you’re also a student at this school!"},{"zh":"我还以为是谁呢，原来是你。","py":"Wǒ hái yǐwéi shì shéi ne, yuánlái shì nǐ.","en":"I was wondering who it was — it turns out it’s you."}]},{"n":3,"title":"并 (bìng)","desc":"Adverb used before a negative word (不/没) to emphasize the negation, often correcting a misconception. It means ‘actually’ or ‘really’ in negative contexts.","structure":"并 + 不/没 + Verb/Adjective","examples":[{"zh":"他虽然很忙，但并没有忘记你的生日。","py":"Tā suīrán hěn máng, dàn bìng méiyǒu wàngjì nǐ de shēngrì.","en":"Although he is very busy, he hasn’t actually forgotten your birthday."},{"zh":"这件事并不像你想的那么简单。","py":"Zhè jiàn shì bìng bú xiàng nǐ xiǎng de nàme jiǎndān.","en":"This matter is not actually as simple as you think."}]},{"n":4,"title":"按照 (ànzhào)","desc":"Preposition meaning ‘according to’ or ‘in accordance with’. Introduces a standard, rule, or basis.","structure":"按照 + Noun + Verb","examples":[{"zh":"按照公司的规定，你必须提前三天请假。","py":"Ànzhào gōngsī de guīdìng, nǐ bìxū tíqián sān tiān qǐngjià.","en":"According to company rules, you must ask for leave three days in advance."},{"zh":"按照他的说法，这件事应该很容易解决。","py":"Ànzhào tā de shuōfǎ, zhè jiàn shì yīnggāi hěn róngyì jiějué.","en":"According to what he said, this matter should be easy to solve."}]},{"n":5,"title":"甚至 (shènzhì)","desc":"Adverb meaning ‘even’ or ‘so much so that’. Introduces the most extreme example in a series.","structure":"甚至 + (Verb/Clause)","examples":[{"zh":"他忙得甚至连吃饭的时间都没有。","py":"Tā máng de shènzhì lián chīfàn de shíjiān dōu méiyǒu.","en":"He is so busy that he doesn’t even have time to eat."},{"zh":"这个字很难，甚至很多中国人都不认识。","py":"Zhège zì hěn nán, shènzhì hěn duō Zhōngguó rén dōu bú rènshi.","en":"This character is so difficult that even many Chinese people don’t recognize it."}]}],"5":[{"n":1,"title":"肯定 (kěndìng)","desc":"Usage A (Adv): 'Certainly' or 'definitely'. Usage B (Adj): 'Definite' or 'sure'.","structure":"肯定 + Verb","examples":[{"zh":"质量肯定不\"打折\"。","py":"Zhìliàng kěndìng bù dǎ zhé.","en":"The quality is definitely not discounted."},{"zh":"不能肯定的事，最好不要说。","py":"Bù néng kěndìng de shì, zuìhǎo búyào shuō.","en":"Things that are not certain are best left unsaid."}]},{"n":2,"title":"再说 (zàishuō)","desc":"Usage A (Conj): 'Besides', 'moreover'. Usage B (Verb): To put something off.","structure":"Statement + 再说 + Reason","examples":[{"zh":"今天买的东西太多了。再说，这个月已经花了五千多了。","py":"Jīntiān mǎi de dōngxi tài duō le. Zàishuō, zhège yuè yǐjīng huā le wǔqiān duō le.","en":"We bought too much today. Besides, we spent over 5000 this month."}]},{"n":3,"title":"实际 (shíjì)","desc":"Noun (reality) or Adjective (practical). 实际上 (Actually) indicates a transition.","structure":"实际上 + Statement","examples":[{"zh":"广告说得很好，实际上没那么好。","py":"Guǎnggào shuō de hěn hǎo, shíjìshang méi nàme hǎo.","en":"The ad speaks well of it, but in fact, it's not that good."}]},{"n":4,"title":"对......来说 (duì... lái shuō)","desc":"'As for...' or 'From the perspective of...'.","structure":"对 + Pronoun/Noun + 来说","examples":[{"zh":"对我来说，衣服的样子流行不流行并不是很重要。","py":"Duì wǒ lái shuō, yīfu de yàngzi liúxíng bu liúxíng bìng bú shì hěn zhòngyào.","en":"As for me, whether the clothes are popular or not isn't very important."}]},{"n":5,"title":"尤其 (yóuqí)","desc":"Adverb meaning 'especially' or 'particularly'.","structure":"尤其 + Verb","examples":[{"zh":"年轻人尤其喜欢在网上买东西。","py":"Niánqīng rén yóuqí xǐhuan zài wǎngshàng mǎi dōngxi.","en":"Young people especially like shopping online."}]}],"6":[{"n":1,"title":"一分钱一分货 (Idiom)","desc":"Literally 'one cent price, one cent goods'. Means 'You get what you pay for'.","structure":"一分钱一分货","examples":[{"zh":"这种电视虽然贵，但是一分钱一分货，质量非常好。","py":"Zhè zhǒng diànshì suīrán guì, dànshì yī fēn qián yī fēn huò, zhìliàng fēicháng hǎo.","en":"Although this TV is expensive, you get what you pay for; the quality is excellent."}]},{"n":2,"title":"竟然 (jìngrán)","desc":"Adverb indicating surprise or unexpectedness.","structure":"Subject + 竟然 + Verb/Adj","examples":[{"zh":"这么简单的问题他竟然没回答上来。","py":"Zhème jiǎndān de wèntí tā jìngrán méi huídá shànglái.","en":"Surprisingly, he couldn't answer such a simple question."},{"zh":"回家以后，我才发现，竟然忘了去商场的超市买果汁！","py":"Huíjiā yǐhòu, wǒ cái fāxiàn, jìngrán wàng le qù shāngchǎng de chāoshì mǎi guǒzhī!","en":"After getting home, I realized I unexpectedly forgot to buy juice!"}]},{"n":3,"title":"倍 (bèi)","desc":"Expresses multiplication. 'A is two times B' or 'A is one time more than B' both mean A = 2B.","structure":"Number + 倍","examples":[{"zh":"今天的价格是昨天的两倍。","py":"Jīntiān de jiàgé shì zuótiān de liǎng bèi.","en":"Today's price is double yesterday's."}]},{"n":4,"title":"值得 (zhídé)","desc":"Verb 'to be worth'. Often followed by a verb or clause.","structure":"值得 + Verb/Clause","examples":[{"zh":"这本小说写得很好，值得看。","py":"Zhè běn xiǎoshuō xiě de hěn hǎo, zhídé kàn.","en":"This novel is well written; it's worth reading."}]},{"n":5,"title":"其中 (qízhōng)","desc":"Noun 'among them' or 'in which'. Refers to a subset of a group.","structure":"其中 + Noun/Phrase","examples":[{"zh":"我们班有 20 个学生，其中一半是女生。","py":"Wǒmen bān yǒu 20 ge xuéshēng, qízhōng yíbàn shì nǚshēng.","en":"Our class has 20 students; among them, half are girls."}]},{"n":6,"title":"在......下 (zài... xià)","desc":"'Under...' or 'In...'. Indicates a condition or situation.","structure":"在 + Noun + 下","examples":[{"zh":"在一般情况下，你花的钱越多，买的东西也就越好。","py":"Zài yībān qíngkuàng xià, nǐ huā de qián yuè duō, mǎi de dōngxi yě jiù yuè hǎo.","en":"Under normal circumstances, the more you spend, the better the goods."}]}],"7":[{"n":1,"title":"估计 (gūjì)","desc":"Verb ‘to estimate’ or ‘to reckon’. Implies judgment or prediction based on available information.","structure":"Subject + 估计 + Statement","examples":[{"zh":"我估计他今天不来了。","py":"Wǒ gūjì tā jīntiān bù lái le.","en":"I estimate he won’t come today."},{"zh":"你估计这个项目要多长时间才能完成？","py":"Nǐ gūjì zhège xiàngmù yào duō cháng shíjiān cái néng wánchéng?","en":"How long do you estimate it will take to finish this project?"}]},{"n":2,"title":"来不及 (láibují)","desc":"Verb phrase meaning ‘there’s not enough time’ or ‘it’s too late’. Indicates that there is insufficient time to do something.","structure":"来不及 + Verb","examples":[{"zh":"快点儿，否则就来不及了。","py":"Kuài diǎnr, fǒuzé jiù láibují le.","en":"Hurry up, otherwise it will be too late."},{"zh":"我现在来不及吃早饭了，得马上走。","py":"Wǒ xiànzài láibují chī zǎofàn le, děi mǎshàng zǒu.","en":"I don’t have time to eat breakfast now; I have to leave immediately."}]},{"n":3,"title":"Reduplication of Separable Verbs (AAB)","desc":"Verb-Object words (离合词) reduplicate in the pattern AAB (e.g., 散散步) to indicate a brief or casual action.","structure":"A + A + B (e.g., 散散步, 见见面)","examples":[{"zh":"吃完饭，我们出去散散步吧。","py":"Chī wán fàn, wǒmen chūqù sànsanbù ba.","en":"After eating, let’s go for a walk."},{"zh":"我想跟你见见面，聊聊天。","py":"Wǒ xiǎng gēn nǐ jiànjianmiàn, liáoliao tiān.","en":"I want to meet with you and have a chat."}]},{"n":4,"title":"要是 (yàoshi)","desc":"Conjunction meaning ‘if’, colloquial equivalent of 如果. Often used with 就 in the result clause.","structure":"要是 + Condition, 就 + Result","examples":[{"zh":"要是你没时间，就别去了。","py":"Yàoshi nǐ méi shíjiān, jiù bié qù le.","en":"If you don’t have time, don’t go."},{"zh":"要是明天天气好，我们就去公园。","py":"Yàoshi míngtiān tiānqì hǎo, wǒmen jiù qù gōngyuán.","en":"If the weather is good tomorrow, we’ll go to the park."}]},{"n":5,"title":"既……又/也/还…… (jì... yòu/yě/hái...)","desc":"Structure meaning ‘both... and...’ or ‘not only... but also...’. Connects two parallel qualities or actions. 既 introduces the first, and 又/也/还 introduces the second.","structure":"既 + A + 又/也/还 + B","examples":[{"zh":"这个房子既干净又便宜。","py":"Zhège fángzi jì gānjìng yòu piányi.","en":"This house is both clean and cheap."},{"zh":"他既会说英语，也会说法语。","py":"Tā jì huì shuō Yīngyǔ, yě huì shuō Fǎyǔ.","en":"He can speak both English and French."}]}],"8":[{"n":1,"title":"使 (shǐ)","desc":"Verb 'to make' or 'to cause', similar to 让 but more formal and written.","structure":"A + 使 + B + Adj/Verb","examples":[{"zh":"伤心难过的时候吃块儿巧克力，能使人的心情变得愉快。","py":"Shāngxīn nánguò de shíhou chī kuàir qiǎokèlì, néng shǐ rén de xīnqíng biàn de yúkuài.","en":"Eating a piece of chocolate when sad can make one's mood become happy."}]},{"n":2,"title":"只要 (zhǐyào)","desc":"Conjunction 'as long as'. Introduces a necessary condition.","structure":"只要 + Condition, 就 + Result","examples":[{"zh":"只要这次好好儿准备，一定能把比赛踢好。","py":"Zhǐyào zhè cì hǎohāor zhǔnbèi, yídìng néng bǎ bǐsài tī hǎo.","en":"As long as you prepare well this time, you definitely can play the match well."}]},{"n":3,"title":"可不是 (kěbúshì)","desc":"Adverb expressing strong agreement. 'Exactly!', 'That's just the way it is'.","structure":"可不是","examples":[{"zh":"A: 遇到堵车，心情也\"堵\"。 B: 可不是！","py":"A: Yùdào dǔchē, xīnqíng yě \"dǔ\". B: Kěbúshì!","en":"A: When encountering traffic jams, the mood also gets 'blocked'. B: Exactly!"}]},{"n":4,"title":"因此 (yīncǐ)","desc":"Conjunction 'therefore', 'so'. Connects cause and effect. Formal.","structure":"Reason, 因此 + Result","examples":[{"zh":"生活的态度要自己选择，因此，遇到烦恼时，你应该想一些办法。","py":"Shēnghuó de tàidù yào zìjǐ xuǎnzé, yīncǐ, yùdào fánnǎo shí, nǐ yīnggāi xiǎng yìxiē bànfǎ.","en":"Attitude towards life must be chosen by yourself, therefore, when encountering troubles, you should think of some ways."}]},{"n":5,"title":"往往 (wǎngwǎng)","desc":"Adverb 'often', 'frequently'. Indicates a regularity based on past experience.","structure":"Subject + 往往 + Verb/Adj","examples":[{"zh":"女孩子对衣服颜色的选择往往与她们的性格有关。","py":"Nǚháizi duì yīfu yánsè de xuǎnzé wǎngwǎng yǔ tāmen de xìnggé yǒuguān.","en":"Girls' choice of clothing color is often related to their character."}]}],"9":[{"n":1,"title":"难道 (nándào)","desc":"Rhetorical question 'Could it be that...?' used for emphasis.","structure":"难道 + Rhetorical Question","examples":[{"zh":"这件事难道你不知道吗？","py":"Zhè jiàn shì nándào nǐ bù zhīdào ma?","en":"Could it be that you don't know this matter?"}]},{"n":2,"title":"通过 (tōngguò)","desc":"Preposition 'by means of' or Verb 'to pass'.","structure":"通过 + Method, Result","examples":[{"zh":"通过写小说，他成了一名作家。","py":"Tōngguò xiě xiǎoshuō, tā chéngle yì míng zuòjiā.","en":"He became a writer by means of writing novels."}]},{"n":3,"title":"可是 (kěshì)","desc":"Conjunction 'but/however'.","structure":"Statement, 可是 + Statement","examples":[{"zh":"他想当作家，可是没坚持。","py":"Tā xiǎng dāng zuòjiā, kěshì méi jiānchí.","en":"He wanted to be a writer, but didn't persist."}]},{"n":4,"title":"结果 (jiéguǒ)","desc":"Noun 'result' or Conjunction 'as a result/consequently'.","structure":"Action, 结果 + Outcome","examples":[{"zh":"他不想放弃，结果成功了。","py":"Tā bù xiǎng fàngqì, jiéguǒ chénggōng le.","en":"He didn't want to give up, and as a result, he succeeded."}]},{"n":5,"title":"上 (shàng)","desc":"Resultative complement indicating attainment (e.g. 考上).","structure":"Verb + 上 + Noun","examples":[{"zh":"他终于考上了大学。","py":"Tā zhōngyú kǎoshàng le dàxué.","en":"He finally passed the exam for university."}]}],"10":[{"n":1,"title":"不过 (búguò)","desc":"Conjunction 'but/however'. Softer than 但是.","structure":"Statement, 不过 + Statement","examples":[{"zh":"他很想去，不过他没有时间。","py":"Tā hěn xiǎng qù, búguò tā méiyǒu shíjiān.","en":"He wants to go, but doesn't have time."}]},{"n":2,"title":"确实 (quèshí)","desc":"Adverb 'indeed/truly'. Confirms a fact.","structure":"Subject + 确实 + Verb/Adj","examples":[{"zh":"这里的景色确实不错。","py":"Zhèlǐ de jǐngsè quèshí búcuò.","en":"The scenery here is indeed nice."}]},{"n":3,"title":"在......看来 (zài... kànlái)","desc":"'In ...'s opinion'.","structure":"在 + Person + 看来","examples":[{"zh":"在我看来，健康比金钱更重要。","py":"Zài wǒ kànlái, jiànkāng bǐ jīnqián gèng zhòngyào.","en":"In my opinion, health is more important than money."}]},{"n":4,"title":"由于 (yóuyú)","desc":"Conjunction 'due to/because of'. More formal than 因为.","structure":"由于 + Cause, (Result)","examples":[{"zh":"由于天气原因，飞机晚点了。","py":"Yóuyú tiānqì yuányīn, fēijī wǎndiǎn le.","en":"Due to weather, the flight was delayed."}]},{"n":5,"title":"比如 (bǐrú)","desc":"'For example'.","structure":"Statement, 比如 + Noun","examples":[{"zh":"我喜欢很多运动，比如游泳。","py":"Wǒ xǐhuan hěn duō yùndòng, bǐrú yóuyǒng.","en":"I like many sports, for example swimming."}]}],"11":[{"n":1,"title":"连 (lián)","desc":"Preposition meaning ‘even’. Used to introduce an extreme example, often followed by 都/也 to emphasize a point.","structure":"连 + Noun/Phrase + 都/也 + Verb","examples":[{"zh":"他忙得连吃饭的时间都没有。","py":"Tā máng de lián chīfàn de shíjiān dōu méiyǒu.","en":"He is so busy that he doesn’t even have time to eat."},{"zh":"这个字很难，连老师都不认识。","py":"Zhège zì hěn nán, lián lǎoshī dōu bú rènshi.","en":"This character is so difficult that even the teacher doesn’t recognize it."}]},{"n":2,"title":"否则 (fǒuzé)","desc":"Conjunction meaning ‘otherwise’ or ‘or else’. Indicates what will happen if the previous condition is not met.","structure":"Statement + 否则 + Consequence","examples":[{"zh":"快点儿，否则就来不及了。","py":"Kuài diǎnr, fǒuzé jiù láibují le.","en":"Hurry up, otherwise it will be too late."},{"zh":"你必须现在出发，否则会迟到。","py":"Nǐ bìxū xiànzài chūfā, fǒuzé huì chídào.","en":"You must leave now, otherwise you will be late."}]},{"n":3,"title":"无论……都/也…… (wúlùn... dōu/yě...)","desc":"Conjunction meaning ‘no matter’ or ‘regardless of’. Indicates that the result remains the same in all circumstances. Similar to 不管.","structure":"无论 + A + 都/也 + B","examples":[{"zh":"无论明天下不下雨，我都要去。","py":"Wúlùn míngtiān xià bu xià yǔ, wǒ dōu yào qù.","en":"No matter whether it rains tomorrow or not, I will go."},{"zh":"无论你去哪儿，我都跟着你。","py":"Wúlùn nǐ qù nǎr, wǒ dōu gēnzhe nǐ.","en":"No matter where you go, I will follow you."}]},{"n":4,"title":"然而 (rán‘ér)","desc":"Conjunction meaning ‘however’ or ‘yet’. More formal than 但是, used in written or formal contexts.","structure":"Statement, 然而 + Contrasting Statement","examples":[{"zh":"他很努力，然而结果并不理想。","py":"Tā hěn nǔlì, rán‘ér jiéguǒ bìng bù lǐxiǎng.","en":"He worked hard; however, the result was not ideal."},{"zh":"这里风景很美，然而游客并不多。","py":"Zhèlǐ fēngjǐng hěn měi, rán‘ér yóukè bìng bù duō.","en":"The scenery here is beautiful; however, there aren’t many tourists."}]},{"n":5,"title":"同时 (tóngshí)","desc":"Adverb meaning ‘at the same time’ or ‘simultaneously’. Indicates two actions or situations occurring together.","structure":"Subject + 同时 + Verb","examples":[{"zh":"他同时在两个公司工作。","py":"Tā tóngshí zài liǎng ge gōngsī gōngzuò.","en":"He works at two companies at the same time."},{"zh":"我们要学习新知识，同时也要复习旧知识。","py":"Wǒmen yào xuéxí xīn zhīshi, tóngshí yě yào fùxí jiù zhīshi.","en":"We need to learn new knowledge and at the same time review old knowledge."}]}],"12":[{"n":1,"title":"并且 (bìngqiě)","desc":"Conjunction 'and/furthermore'. Connects verbs or clauses.","structure":"Clause 1 + 并且 + Clause 2","examples":[{"zh":"希望及时发现问题，并且准确地找到解决问题的方法。","py":"Xīwàng jíshí fāxiàn wèntí, bìngqiě zhǔnquè de zhǎodào jiějué wèntí de fāngfǎ.","en":"Hope to discover problems in time and accurately find solutions."}]},{"n":2,"title":"再......也...... (zài... yě...)","desc":"'No matter how... still...'. Indicates concession.","structure":"再 + Adj/Verb + 也","examples":[{"zh":"这样穿得再久，洗的次数再多，衣服也不容易掉颜色。","py":"Zhèyàng chuān de zài jiǔ, xǐ de cìshù zài duō, yīfu yě bù róngyì diào yánsè.","en":"This way, no matter how long you wear it or how many times you wash it, the clothes won't fade easily."}]},{"n":3,"title":"对于 (duìyú)","desc":"Preposition 'with regard to/for'. Introduces the object of an attitude/situation.","structure":"对于 + Topic + 来说","examples":[{"zh":"那您认为对于老师来说，什么是最难做到的？","py":"Nà nín rènwéi duìyú lǎoshī lái shuō, shénme shì zuì nán zuòdào de?","en":"Then what do you think is the hardest thing for a teacher to do?"}]},{"n":4,"title":"相反 (xiāngfǎn)","desc":"'Opposite' or 'On the contrary'. Indicates a transition to an opposing view.","structure":"相反 + Statement","examples":[{"zh":"相反，如果方法不对，可能花五倍甚至十倍的时间都不能完成任务。","py":"Xiāngfǎn, rúguǒ fāngfǎ bú duì, kěnéng huā wǔ bèi shènzhì shí bèi de shíjiān dōu bù néng wánchéng rènwu.","en":"On the contrary, if the method is wrong, it may take five or ten times the time to complete the task."}]}],"13":[{"n":1,"title":"大概 (dàgài)","desc":"Adverb meaning 'probably' or 'roughly'. Expresses probability or approximate estimation.","structure":"大概 + Verb/Number","examples":[{"zh":"他大概明天回来。","py":"Tā dàgài míngtiān huílai.","en":"He will probably come back tomorrow."},{"zh":"大概有三十个人参加会议。","py":"Dàgài yǒu sānshí ge rén cānjiā huìyì.","en":"About thirty people attended the meeting."}]},{"n":2,"title":"偶尔 (ǒu'ěr)","desc":"Adverb meaning 'occasionally' or 'once in a while'. Indicates low frequency.","structure":"偶尔 + Verb","examples":[{"zh":"我偶尔会去看电影。","py":"Wǒ ǒu'ěr huì qù kàn diànyǐng.","en":"I occasionally go to the movies."}]},{"n":3,"title":"由 (yóu)","desc":"Preposition meaning 'by' or 'from'. Introduces the agent or cause.","structure":"由 + Agent + Verb","examples":[{"zh":"这个项目由他负责。","py":"Zhège xiàngmù yóu tā fùzé.","en":"This project is handled by him."}]},{"n":4,"title":"进行 (jìnxíng)","desc":"Verb meaning 'to carry out' or 'to conduct'. Used with activities or processes.","structure":"进行 + Noun/Verb","examples":[{"zh":"会议正在进行。","py":"Huìyì zhèngzài jìnxíng.","en":"The meeting is in progress."}]},{"n":5,"title":"随着 (suízhe)","desc":"Preposition meaning 'along with' or 'following'. Indicates something changes as another thing changes.","structure":"随着 + Noun/Phrase + Change","examples":[{"zh":"随着经济的发展，人们的生活越来越好。","py":"Suízhe jīngjì de fāzhǎn, rénmen de shēnghuó yuè lái yuè hǎo.","en":"Along with economic development, people's lives are getting better and better."}]}],"14":[{"n":1,"title":"够 (gòu)","desc":"Usage A (Verb): ‘To be enough’ or ‘to suffice’. Usage B (Adverb): ‘Quite’ or ‘enough’, indicating reaching a certain degree. In affirmative sentences with 够 + Adjective, 的 is often added at the end.","structure":"够 + Adjective + 的 / 够 + Verb","examples":[{"zh":"箱子已经够重的了！","py":"Xiāngzi yǐjīng gòu zhòng de le!","en":"The suitcase is already heavy enough!"},{"zh":"这本书够我看一个星期。","py":"Zhè běn shū gòu wǒ kàn yí ge xīngqī.","en":"This book is enough for me to read for a week."}]},{"n":2,"title":"以 (yǐ)","desc":"Preposition meaning ‘with’ or ‘by means of’. Indicates the means or basis of an action.","structure":"以 + Noun/Phrase + Verb","examples":[{"zh":"他以优异的成绩考上了大学。","py":"Tā yǐ yōuyì de chéngjì kǎoshàng le dàxué.","en":"He was admitted to university with excellent grades."},{"zh":"我们应该以积极的态度面对困难。","py":"Wǒmen yīnggāi yǐ jījí de tàidù miànduì kùnnan.","en":"We should face difficulties with a positive attitude."}]},{"n":3,"title":"既然……就…… (jìrán... jiù...)","desc":"Conjunction structure meaning ‘since... then...’. Used to infer a result from a given fact.","structure":"既然 + Fact + 就 + Result","examples":[{"zh":"既然你不想扔，那就先放在这儿吧。","py":"Jìrán nǐ bù xiǎng rēng, nà jiù xiān fàng zài zhèr ba.","en":"Since you don’t want to throw it away, then just put it here for now."},{"zh":"既然你已经决定了，我就支持你。","py":"Jìrán nǐ yǐjīng juédìng le, wǒ jiù zhīchí nǐ.","en":"Since you’ve already decided, I’ll support you."}]},{"n":4,"title":"于是 (yúshì)","desc":"Conjunction meaning ‘so’ or ‘therefore’. Indicates a sequential relationship between cause and effect.","structure":"Cause + 于是 + Effect","examples":[{"zh":"因为各种污染，于是环境变得越来越差。","py":"Yīnwèi gè zhǒng wūrǎn, yúshì huánjìng biàn de yuè lái yuè chà.","en":"Because of various kinds of pollution, the environment has become worse and worse."},{"zh":"他觉得太累了，于是决定休息一会儿。","py":"Tā juéde tài lèi le, yúshì juédìng xiūxi yíhuìr.","en":"He felt too tired, so he decided to rest for a while."}]},{"n":5,"title":"什么的 (shénme de)","desc":"Particle phrase meaning ‘and so on’ or ‘things like that’. Used after a list to indicate similar items.","structure":"Noun + 什么的","examples":[{"zh":"我喜欢吃水果，比如苹果、香蕉什么的。","py":"Wǒ xǐhuan chī shuǐguǒ, bǐrú píngguǒ, xiāngjiāo shénme de.","en":"I like eating fruit, such as apples, bananas, and so on."},{"zh":"周末我喜欢看看书、听听音乐什么的。","py":"Zhōumò wǒ xǐhuan kànkan shū, tīngting yīnyuè shénme de.","en":"On weekends I like to read books, listen to music, and things like that."}]}],"15":[{"n":1,"title":"想起来 (xiǎng qǐlái)","desc":"Complement of direction meaning ‘to recall’ or ‘to remember’. Indicates retrieving information from memory.","structure":"想起来 + Clause","examples":[{"zh":"我突然想起来，我忘了带钥匙。","py":"Wǒ tūrán xiǎng qǐlái, wǒ wàng le dài yàoshi.","en":"I suddenly remembered that I forgot to bring the keys."},{"zh":"我想不起来他的名字了。","py":"Wǒ xiǎng bu qǐlái tā de míngzi le.","en":"I can’t remember his name."}]},{"n":2,"title":"弄 (nòng)","desc":"General verb meaning ‘to do’, ‘to make’, or ‘to handle’. Used when the specific action is unclear or unimportant.","structure":"把 + Noun + 弄 + Adjective","examples":[{"zh":"把房间弄干净。","py":"Bǎ fángjiān nòng gānjìng.","en":"Make the room clean."},{"zh":"我的手机弄坏了。","py":"Wǒ de shǒujī nòng huài le.","en":"I broke my phone."}]},{"n":3,"title":"千万 (qiānwàn)","desc":"Adverb meaning ‘by all means’ or ‘must’. Used for strong advice or warnings. More commonly used in negative sentences with 别/不要.","structure":"千万 + 要/别 + Verb","examples":[{"zh":"千万别迟到。","py":"Qiānwàn bié chídào.","en":"Be sure not to be late."},{"zh":"你千万要小心。","py":"Nǐ qiānwàn yào xiǎoxīn.","en":"You must be careful."}]},{"n":4,"title":"来 (lái)","desc":"Used before a verb to indicate intention or invitation. Softens the tone and implies ‘come (and do something)’.","structure":"Subject + 来 + Verb","examples":[{"zh":"你来弹一首曲子吧。","py":"Nǐ lái tán yì shǒu qǔzi ba.","en":"You come and play a tune."},{"zh":"我来帮你拿行李。","py":"Wǒ lái bāng nǐ ná xíngli.","en":"Let me help you carry the luggage."}]},{"n":5,"title":"左右 (zuǒyòu)","desc":"Noun meaning ‘around’ or ‘approximately’. Used after a number or time expression.","structure":"Numeral/Time + 左右","examples":[{"zh":"三十岁左右。","py":"Sānshí suì zuǒyòu.","en":"Around 30 years old."},{"zh":"他大概下午三点左右到。","py":"Tā dàgài xiàwǔ sān diǎn zuǒyòu dào.","en":"He will arrive around three o’clock in the afternoon."}]}],"16":[{"n":1,"title":"恐怕 (kǒngpà)","desc":"Usage A (V): 'To fear' or 'to be afraid'. Usage B (Adv): 'Probably' or 'perhaps', expressing estimation with some concern.","structure":"恐怕 + Verb/Statement","examples":[{"zh":"恐怕他不会来了。","py":"Kǒngpà tā bú huì lái le.","en":"I'm afraid he won't come."}]},{"n":2,"title":"可 (kě)","desc":"Adverb used for emphasis. Strengthens the tone of a sentence.","structure":"可 + Adjective/Verb + 了","examples":[{"zh":"这可太好了！","py":"Zhè kě tài hǎo le!","en":"This is really great!"}]},{"n":3,"title":"到底 (dàodǐ)","desc":"Usage A (V): 'To the end'. Usage B (Adv): Used in questions for emphasis, meaning 'exactly' or 'after all'.","structure":"到底 + Question","examples":[{"zh":"你到底要不要去看医生？","py":"Nǐ dàodǐ yào bu yào qù kàn yīshēng?","en":"Are you going to see the doctor or not?"}]},{"n":4,"title":"拿......来说 (ná... lái shuō)","desc":"Pattern meaning 'take... for example' or 'as for...'.","structure":"拿 + Noun + 来说","examples":[{"zh":"拿北京来说，房价非常高。","py":"Ná Běijīng lái shuō, fángjià fēicháng gāo.","en":"Take Beijing for example, housing prices are very high."}]},{"n":5,"title":"敢 (gǎn)","desc":"Verb meaning 'to dare'. Indicates courage or boldness.","structure":"敢 + Verb","examples":[{"zh":"我不敢一个人晚上出门。","py":"Wǒ bù gǎn yí ge rén wǎnshang chūmén.","en":"I don't dare go out alone at night."}]}],"17":[{"n":1,"title":"倒 (dào)","desc":"Adverb indicating a transition, often expressing contrast or something contrary to expectations.","structure":"Subject + 倒 + Verb/Adjective","examples":[{"zh":"去长城倒是一个好主意。","py":"Qù Chángchéng dào shì yí ge hǎo zhǔyi.","en":"Going to the Great Wall is actually a good idea."},{"zh":"这倒不是钱的问题。","py":"Zhè dào bú shì qián de wèntí.","en":"This is actually not a matter of money."}]},{"n":2,"title":"干 (gàn)","desc":"Verb meaning ‘to do’ or ‘to work’. Indicates engaging in an activity or job.","structure":"Subject + (Adverb) + 干","examples":[{"zh":"以后要继续努力，我一定会好好儿干的。","py":"Yǐhòu yào jìxù nǔlì, wǒ yídìng huì hǎohāor gàn de.","en":"I will continue to work hard; I will certainly do my best."},{"zh":"他干什么工作？","py":"Tā gàn shénme gōngzuò?","en":"What work does he do?"}]},{"n":3,"title":"趟 (tàng)","desc":"Measure word indicating the number of round trips. Used for actions involving going and returning.","structure":"Verb + 一 + 趟 + Place","examples":[{"zh":"上个月我去了一趟北京动物园。","py":"Shàng ge yuè wǒ qù le yí tàng Běijīng Dòngwùyuán.","en":"Last month I went to the Beijing Zoo."},{"zh":"我得去一趟医院。","py":"Wǒ děi qù yí tàng yīyuàn.","en":"I need to go to the hospital."}]},{"n":4,"title":"为了……而…… (wèile... ér...)","desc":"Pattern indicating the purpose of an action. 为了 introduces the purpose, and 而 connects to the action.","structure":"为了 + Purpose + 而 + Verb","examples":[{"zh":"植物会为了阳光、空气和水而竞争。","py":"Zhíwù huì wèile yángguāng, kōngqì hé shuǐ ér jìngzhēng.","en":"Plants compete for sunlight, air, and water."},{"zh":"我们为了理想而努力。","py":"Wǒmen wèile lǐxiǎng ér nǔlì.","en":"We work hard for our ideals."}]},{"n":5,"title":"仍然 (réngrán)","desc":"Adverb meaning ‘still’ or ‘yet’. Indicates that a situation continues unchanged.","structure":"Subject + 仍然 + Verb/Adjective","examples":[{"zh":"虽然下雨了，他仍然坚持去跑步。","py":"Suīrán xià yǔ le, tā réngrán jiānchí qù pǎobù.","en":"Although it rained, he still insisted on going running."},{"zh":"十年过去了，他仍然住在那条街上。","py":"Shí nián guòqù le, tā réngrán zhù zài nà tiáo jiē shang.","en":"Ten years have passed, and he still lives on that street."}]}],"18":[{"n":1,"title":"是否 (shìfǒu)","desc":"Expresses 'whether or not' or 'if'. Formal alternative to 是不是.","structure":"是否 + Verb/Adjective","examples":[{"zh":"我不确定他是否能来。","py":"Wǒ bú quèdìng tā shìfǒu néng lái.","en":"I'm not sure whether he can come."}]},{"n":2,"title":"受不了 (shòu bu liǎo)","desc":"Verb phrase meaning 'cannot stand' or 'cannot bear'.","structure":"Subject + 受不了 + Noun/Verb","examples":[{"zh":"我受不了这么热的天气。","py":"Wǒ shòu bu liǎo zhème rè de tiānqì.","en":"I can't stand such hot weather."}]},{"n":3,"title":"接着 (jiēzhe)","desc":"Adverb meaning 'then' or 'following'. Indicates something happens immediately after something else.","structure":"Statement, 接着 + Statement","examples":[{"zh":"他毕业后在老家工作了一年，接着又考上了北京大学。","py":"Tā bìyè hòu zài lǎojiā gōngzuò le yì nián, jiēzhe yòu kǎoshàng le Běijīng Dàxué.","en":"After graduation he worked in his hometown for a year, then got into Peking University."}]},{"n":4,"title":"除此以外 (chú cǐ yǐwài)","desc":"Phrase meaning 'besides this' or 'apart from this'.","structure":"除此以外 + Statement","examples":[{"zh":"除此以外，我没有别的要求。","py":"Chú cǐ yǐwài, wǒ méiyǒu bié de yāoqiú.","en":"Apart from this, I have no other requests."}]},{"n":5,"title":"把......叫作...... (bǎ... jiào zuò...)","desc":"Pattern meaning 'to call... as...' or 'to refer to... as...'.","structure":"把 + A + 叫作 + B","examples":[{"zh":"人们把这种动物叫作大熊猫。","py":"Rénmen bǎ zhè zhǒng dòngwù jiào zuò dàxióngmāo.","en":"People call this animal the giant panda."}]}],"19":[{"n":1,"title":"上 (shàng)","desc":"Used after a verb as a complement of direction or possibility.","structure":"Verb + 得/不 + 上 + Noun","examples":[{"zh":"看来今天吃不上羊肉饺子了。","py":"Kànlái jīntiān chī bu shàng yángròu jiǎozi le.","en":"It seems we can't eat mutton dumplings today."}]},{"n":2,"title":"出来 (chūlái)","desc":"Complement of direction indicating emergence or identification.","structure":"Verb + 出来 + Clause","examples":[{"zh":"我看出来你跳得这么好。","py":"Wǒ kàn chūlai nǐ tiào de zhème hǎo.","en":"I can see that you dance so well."}]},{"n":3,"title":"总的来说 (zǒng de lái shuō)","desc":"Generally speaking.","structure":"总的来说 + Statement","examples":[{"zh":"总的来说，这套房子他很满意。","py":"Zǒng de lái shuō, zhè tào fángzi tā hěn mǎnyì.","en":"Generally speaking, he is very satisfied with this house."}]},{"n":4,"title":"在于 (zàiyú)","desc":"To lie in; to consist in.","structure":"Subject + 在于 + Noun / Verb","examples":[{"zh":"生命在于运动。","py":"Shēngmìng zàiyú yùndòng.","en":"Life lies in motion."}]}],"20":[{"n":1,"title":"V+着+V+着 (V+zhe+V+zhe)","desc":"Indicating another action occurs while the first one is going on, or one action leads to a result.","structure":"Verb + 着 + Verb + 着 + Action","examples":[{"zh":"别开着开着没油了。","py":"Bié kāizhe kāizhe méi yóu le.","en":"Don't run out of gas while driving."}]},{"n":2,"title":"一......就...... (yī...jiù...)","desc":"As soon as; once.","structure":"Subject + 一 + Verb 1 + 就 + Verb 2","examples":[{"zh":"等女儿一回来我就告诉她这个好消息。","py":"Děng nǚ'ér yì huílai wǒ jiù gàosu tā zhège hǎo xiāoxi.","en":"I'll tell our daughter the good news as soon as she comes back."}]},{"n":3,"title":"究竟 (jiūjìng)","desc":"Adverb used in questions for emphasis (exactly/actually).","structure":"究竟 + Question","examples":[{"zh":"究竟哪个季节去丽江旅游比较好呢？","py":"Jiūjìng nǎge jìjié qù Lìjiāng lǚyóu bǐjiào hǎo ne?","en":"Which season is actually better for traveling to Lijiang?"}]},{"n":4,"title":"起来 (qǐlái)","desc":"Complement of direction indicating an upward movement or the start and continuation of an action.","structure":"Verb + 起来 + Clause","examples":[{"zh":"上海话听起来就像外语一样。","py":"Shànghǎi huà tīng qilai jiù xiàng wàiyǔ yíyàng.","en":"Shanghainese sounds like a foreign language."}]},{"n":5,"title":"V + 起 (V + qǐ)","desc":"Introduces the thing that an action involves (e.g., 说起, 谈起).","structure":"Verb + 起 + Noun Phrase","examples":[{"zh":"说起吃的东西，给我印象最深的是湖南菜。","py":"Shuōqǐ chī de dōngxi, gěi wǒ yìnxiàng zuì shēn de shì Húnán cài.","en":"Speaking of food, what impressed me most was Hunan cuisine."}]}]} };
+
+/* Thin mock-API layer — replace these bodies with real fetch calls later. */
+const api = {
+  getLevels(){ return Object.values(hskData); },
+  getLevel(id){ return hskData[id] || null; },
+  getLesson(levelId, lessonId){
+    const lv = hskData[levelId];
+    if(!lv) return null;
+    return lv.lessons.find(l => l.id === Number(lessonId)) || null;
+  }
+};
+
+/* Persisted per-lesson progress (which words have ever been revealed). */
+const progressStore = {
+  key: 'hf-progress-v1',
+  read(){
+    try {
+      const value = JSON.parse(localStorage.getItem(this.key));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    } catch(e){ return {}; }
+  },
+  seenFor(levelId, lessonId){
+    const value = this.read()[levelId + '/' + lessonId];
+    return Array.isArray(value) ? value : [];
+  },
+  markSeen(levelId, lessonId, wordId){
+    const all = this.read(), k = levelId + '/' + lessonId;
+    const set = new Set(Array.isArray(all[k]) ? all[k] : []); set.add(wordId);
+    all[k] = [...set];
+    try { localStorage.setItem(this.key, JSON.stringify(all)); } catch(e){}
+  }
+};
+
+const CN_NUM = ['零','一','二','三','四','五','六','七','八','九','十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十'];
+const pad2 = n => String(n).padStart(2,'0');
+const levelHref  = l => '#/hsk/' + l.id;
+const lessonHref = (l, ls) => '#/hsk/' + l.id + '/lesson/' + ls.id;
+const lessonName = ls => ls.title.split(': ')[1] || ls.title;
+
+/* ================================================================
+   Icons — Lucide path data as plain strings.
+   Pure JS: no JSX, so it lints clean in any .js file and can be
+   moved to lib/icons.js or served from an API as-is.
+================================================================ */
+const ICONS = {
+  'chevron-left':  '<path d="m15 18-6-6 6-6"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'arrow-right':   '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  'moon':          '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  'sun':           '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  'shuffle':       '<path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/>',
+  'rotate-ccw':    '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  'check':         '<path d="M20 6 9 17l-5-5"/>',
+  'volume-2':      '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'
+};
+
+function Icon({ name, size = 20, className = '', strokeWidth = 2 }){
+  const markup = ICONS[name];
+  if (!markup) return null;
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      className={className} aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: markup }} />
+  );
+}
+
+/* ================================================================
+   Hooks
+================================================================ */
+function useDarkMode(){
+  const [dark, setDark] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hf-theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch(e){ return false; }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    try { localStorage.setItem('hf-theme', dark ? 'dark' : 'light'); } catch(e){}
+  }, [dark]);
+  return [dark, setDark];
+}
+
+function useHashRoute(){
+  const parse = () => {
+    const hash = (window.location.hash || '').replace(/^#/, '') || '/';
+    const parts = hash.split('/').filter(Boolean);
+    if (parts[0] === 'hsk' && parts[1]) {
+      if (parts[2] === 'lesson' && parts[3]) return { name:'lesson', levelId:parts[1], lessonId:parts[3] };
+      return { name:'level', levelId:parts[1] };
+    }
+    return { name:'home' };
+  };
+  const [route, setRoute] = useState(parse);
+  useEffect(() => {
+    const on = () => { setRoute(parse()); window.scrollTo(0,0); };
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  return route;
+}
+
+/* ================================================================
+   Small components
+================================================================ */
+function SpeakButton({ text }){
+  const [talking, setTalking] = useState(false);
+  const speak = (e) => {
+    e.stopPropagation();
+    if (!('speechSynthesis' in window)) return;
+    const voices = speechSynthesis.getVoices();
+    const chineseVoice = voices.find(voice => voice.lang.toLowerCase() === 'zh-cn')
+      || voices.find(voice => voice.lang.toLowerCase().startsWith('zh'));
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.voice = chineseVoice || null;
+    u.rate = 0.50;
+    u.pitch = 1;
+    u.onend = () => setTalking(false);
+    u.onerror = () => setTalking(false);
+    setTalking(true);
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    setTimeout(() => setTalking(false), 4000);
+  };
+  return (
+    <button onClick={speak} aria-label={'Hear ' + text} className={'speak' + (talking ? ' on' : '')}>
+      <Icon name="volume-2" size={17}/>
+    </button>
+  );
+}
+
+function Navbar({ dark, onToggle }){
+  return (
+    <header className="sticky top-0 z-30 border-b border-ink/[0.08] dark:border-white/[0.08] bg-porcelain/85 dark:bg-night/85 backdrop-blur-md">
+      <div className="max-w-5xl mx-auto h-16 px-4 sm:px-6 flex items-center justify-between">
+        <a href="#/" className="flex items-center gap-3">
+          <span className="seal w-9 h-9 text-lg">汉</span>
+          <span className="flex items-baseline gap-2">
+            <span className="font-serif font-semibold text-lg tracking-tight">HanziBoss</span>
+            <span className="hidden sm:inline font-hanzi text-sm text-ink/40 dark:text-white/40">汉字大王</span>
+          </span>
+        </a>
+        <button onClick={onToggle} aria-label="Toggle dark mode"
+          className="icon-btn h-10 w-10">
+          <span key={dark ? 'sun' : 'moon'} className="spin-in inline-flex">
+            {dark ? <Icon name="sun" size={18}/> : <Icon name="moon" size={18}/>}
+          </span>
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Footer({ words }){
+  return (
+    <footer className="border-t border-ink/[0.08] dark:border-white/[0.08]">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink/40 dark:text-white/40">
+        <div className="flex items-center gap-2.5">
+          <span className="seal w-6 h-6 text-[11px]">汉</span>
+          <span>HanziBoss — flashcards for the HSK Standard Course</span>
+        </div>
+        <span>Sample vocabulary · {words} words · no account, no noise</span>
+      </div>
+    </footer>
+  );
+}
+
+/* ================================================================
+   Home Page — level selection
+================================================================ */
+function LevelCard({ level, featured, className }){
+  const num = level.label.replace('HSK ', '');
+  const words = level.lessons.reduce((a,l) => a + l.words.length, 0);
+  return (
+    <a href={levelHref(level)}
+      className={"group relative flex flex-col overflow-hidden rounded-2xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card p-6 sm:p-8 transition-all duration-300 hover:-translate-y-1 hover:border-jade/60 hover:shadow-2xl " + (className || '')}>
+      {featured ? (
+        <span className="absolute top-6 right-6 text-[10px] font-bold uppercase tracking-[0.2em] text-jade border border-jade/40 rounded-full px-3 py-1">Start here</span>
+      ) : (
+        <span className="watermark -bottom-8 -right-4 text-[10rem] group-hover:-translate-y-2 group-hover:-rotate-6">{level.hanzi}</span>
+      )}
+      <span className="block text-[11px] uppercase tracking-[0.3em] text-ink/40 dark:text-white/40">HSK Level</span>
+      <div className="mt-3 flex items-baseline gap-3">
+        <span className={"font-serif font-semibold leading-none " + (featured ? "text-6xl sm:text-7xl" : "text-5xl")}>{num}</span>
+        <span className="font-hanzi text-2xl text-ink/30 dark:text-white/30">{level.hanzi}</span>
+      </div>
+      <h3 className="mt-5 font-serif text-xl sm:text-2xl font-semibold">{level.title}</h3>
+      <p className={"mt-2 text-sm leading-relaxed text-ink/60 dark:text-white/60 " + (featured ? "md:max-w-[55%]" : "line-clamp-2")}>{level.blurb}</p>
+      <div className="mt-auto pt-6 flex items-center justify-between text-sm">
+        <span className="text-ink/45 dark:text-white/45">{level.lessons.length} lessons · {words} words</span>
+        <span className="inline-flex items-center gap-1.5 font-semibold text-jade">
+          Start <Icon name="arrow-right" size={16} className="transition-transform duration-300 group-hover:translate-x-1"/>
+        </span>
+      </div>
+      {featured && (
+        <div className="hidden md:flex absolute right-9 top-1/2 -translate-y-1/2 items-center select-none" aria-hidden="true">
+          <div className="w-[104px] h-[132px] rounded-xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card rotate-6 transition-transform duration-300 group-hover:rotate-[9deg] flex items-center justify-center opacity-70">
+            <span className="font-kai text-3xl text-ink/60 dark:text-white/60">谢谢</span>
+          </div>
+          <div className="-ml-5 w-[104px] h-[132px] rounded-xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card shadow-xl -rotate-3 transition-transform duration-300 group-hover:-rotate-1 group-hover:-translate-y-1.5 flex flex-col items-center justify-center gap-1.5">
+            <span className="font-kai text-3xl">你好</span>
+            <span className="font-serif italic text-jade text-sm">nǐ hǎo</span>
+          </div>
+        </div>
+      )}
+    </a>
+  );
+}
+
+function HomePage(){
+  const levels = api.getLevels();
+  const stats = {
+    levels: levels.length,
+    lessons: levels.reduce((a,l) => a + l.lessons.length, 0),
+    words: levels.reduce((a,l) => a + l.lessons.reduce((x,ls) => x + ls.words.length, 0), 0)
+  };
+  const wmRef = useRef(null);
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - .5;
+    const y = (e.clientY - r.top) / r.height - .5;
+    if (wmRef.current) wmRef.current.style.transform = `translate(${x*18}px, ${y*14}px) rotate(${x*2}deg)`;
+  };
+  const onLeave = () => { if (wmRef.current) wmRef.current.style.transform = ''; };
+  const scrollToLevels = () => document.getElementById('levels').scrollIntoView({ behavior:'smooth' });
+
+  return (
+    <div>
+      {/* Hero */}
+      <section className="relative overflow-hidden" onMouseMove={onMove} onMouseLeave={onLeave}>
+        <span aria-hidden="true"
+          className="pointer-events-none absolute -right-6 sm:right-2 top-4 sm:top-1/2 sm:-translate-y-1/2 select-none font-hanzi leading-none text-ink/[0.05] dark:text-white/[0.06]"
+          style={{ fontSize:'clamp(10rem, 34vw, 24rem)' }}>
+          <span ref={wmRef} className="block transition-transform duration-300 ease-out">漢</span>
+        </span>
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-14 sm:pb-20">
+          <p className="eyebrow">HSK Standard Course · Flashcard decks</p>
+          <h1 className="mt-4 font-serif font-semibold text-5xl sm:text-6xl lg:text-7xl leading-[1.05] tracking-tight max-w-3xl">
+            Learn Chinese,<br/>
+            <span className="font-hanzi text-jade">字</span> by <span className="font-hanzi">字</span>.
+          </h1>
+          <p className="mt-6 max-w-xl text-base sm:text-lg text-ink/60 dark:text-white/60 leading-relaxed">
+            Every lesson of the HSK Standard Course, dealt out as clean flashcard decks. Pick a level,
+            choose a lesson, and flip your way through the textbook — no accounts, no streaks, no noise.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <a href="#/hsk/hsk1" className="btn-primary">Start with HSK 1 <Icon name="arrow-right" size={16}/></a>
+            <button onClick={scrollToLevels} className="btn-ghost">Browse levels</button>
+          </div>
+          <div className="mt-12 flex items-center gap-6 sm:gap-10">
+            {[['0'+stats.levels,'Levels'],[pad2(stats.lessons),'Lessons'],[stats.words,'Words']].map(([v,l],i) => (
+              <React.Fragment key={l}>
+                {i > 0 && <span className="w-px h-9 bg-ink/10 dark:bg-white/10"/>}
+                <div>
+                  <div className="font-serif text-3xl font-semibold tabular-nums leading-none">{v}</div>
+                  <div className="mt-1.5 text-[10px] uppercase tracking-[0.25em] text-ink/40 dark:text-white/40">{l}</div>
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works strip */}
+      <section className="border-y border-ink/[0.08] dark:border-white/[0.08]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink/55 dark:text-white/55">
+          {[['01','Pick your level'],['02','Choose a lesson'],['03','Flip, listen, remember']].map(([n,t],i) => (
+            <React.Fragment key={n}>
+              {i > 0 && <Icon name="arrow-right" size={14} className="hidden sm:inline opacity-30"/>}
+              <span className="inline-flex items-baseline gap-2">
+                <span className="font-serif text-jade font-semibold">{n}</span>{t}
+              </span>
+            </React.Fragment>
+          ))}
+        </div>
+      </section>
+
+      {/* Levels — featured deck on top, remaining levels in an equal row */}
+      <section id="levels" className="max-w-5xl mx-auto px-4 sm:px-6 py-14 sm:py-20 scroll-mt-20">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="font-serif text-3xl sm:text-4xl font-semibold tracking-tight">Choose your level</h2>
+            <p className="mt-2 font-hanzi text-ink/40 dark:text-white/40">选择等级 · start where the textbook does</p>
+          </div>
+        </div>
+        <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <LevelCard level={levels[0]} featured className="md:col-span-2 lg:col-span-3 lg:min-h-[340px]"/>
+          {levels.slice(1).map(l => <LevelCard key={l.id} level={l}/>)}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ================================================================
+   Lesson Selection Page
+================================================================ */
+function LessonCard({ level, lesson }){
+  const total = lesson.words.length;
+  const seen = progressStore.seenFor(level.id, lesson.id).length;
+  const pct = total ? seen / total : 0;
+  const complete = total > 0 && seen >= total;
+  return (
+    <a href={lessonHref(level, lesson)}
+      className="group relative flex flex-col rounded-2xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-jade/60 hover:shadow-lg">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-baseline gap-2.5">
+          <span className="font-serif text-4xl font-semibold leading-none">{pad2(lesson.id)}</span>
+          <span className="font-hanzi text-sm text-jade">第{CN_NUM[lesson.id]}课</span>
+        </div>
+        {complete ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.15em] text-jade bg-jade/10 border border-jade/30 rounded-full px-2.5 py-1">
+            <Icon name="check" size={11} strokeWidth={3}/> Complete
+          </span>
+        ) : seen > 0 ? (
+          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-ink/45 dark:text-white/45 border border-ink/15 dark:border-white/15 rounded-full px-2.5 py-1">In progress</span>
+        ) : null}
+      </div>
+      <h3 className="mt-4 font-serif text-lg font-semibold leading-snug">{lessonName(lesson)}</h3>
+      <p className="mt-1 text-xs text-ink/45 dark:text-white/45 font-hanzi">{lesson.cn} · {total} words</p>
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {lesson.words.slice(0,5).map(w => (
+          <span key={w.id} className="font-kai text-sm px-2 py-0.5 rounded-md bg-ink/5 dark:bg-white/[0.07] text-ink/75 dark:text-white/75">{w.hanzi}</span>
+        ))}
+        {total > 5 && (
+          <span className="text-xs px-2 py-0.5 rounded-md bg-ink/5 dark:bg-white/[0.07] text-ink/45 dark:text-white/45 self-center">+{total-5}</span>
+        )}
+      </div>
+      <div className="mt-auto pt-5">
+        <div className="h-1 rounded-full bg-ink/10 dark:bg-white/10 overflow-hidden">
+          <div className="h-full rounded-full bg-jade transition-all duration-500" style={{ width:(pct*100)+'%' }}/>
+        </div>
+        <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink/45 dark:text-white/45">
+          <span>{seen > 0 ? seen + ' of ' + total + ' seen' : total + ' words'}</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-ink dark:text-white group-hover:text-jade transition-colors">
+            Study <Icon name="arrow-right" size={13} className="transition-transform duration-300 group-hover:translate-x-0.5"/>
+          </span>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+function LevelPage({ level }){
+  const totalWords = level.lessons.reduce((a,l) => a + l.words.length, 0);
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+      <nav className="flex items-center gap-1.5 text-sm text-ink/50 dark:text-white/50">
+        <a href="#/" className="hover:text-jade transition-colors">Levels</a>
+        <Icon name="chevron-right" size={14} className="opacity-40"/>
+        <span className="text-ink dark:text-white font-semibold">{level.label}</span>
+      </nav>
+      <header className="relative mt-6 flex items-end justify-between gap-6 border-b border-ink/10 dark:border-white/10 pb-8">
+        <div>
+          <p className="eyebrow">HSK LEVEL {level.label.replace('HSK ','')} · 第{level.hanzi}级</p>
+          <h1 className="mt-3 font-serif text-4xl sm:text-5xl font-semibold tracking-tight">{level.title}</h1>
+          <p className="mt-3 max-w-xl text-ink/60 dark:text-white/60 leading-relaxed">{level.blurb}</p>
+        </div>
+        <span aria-hidden="true" className="hidden sm:block font-hanzi leading-none text-[9rem] text-ink/[0.05] dark:text-white/[0.06] select-none">{level.hanzi}</span>
+      </header>
+      <div className="mt-8 flex items-center justify-between">
+        <h2 className="font-serif text-xl font-semibold">Lessons <span className="font-hanzi text-ink/40 dark:text-white/40 text-base ml-1">课程</span></h2>
+        <span className="text-sm text-ink/50 dark:text-white/50">{level.lessons.length} lessons · {totalWords} words</span>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {level.lessons.map(l => <LessonCard key={l.id} level={level} lesson={l}/>)}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   Flashcard Page — the core learning interface
+================================================================ */
+function Flashcard({ word, pos, total, flipped, onFlip }){
+  const len = Math.min(3, Math.max(1, word.hanzi.length));
+  const hanziSize = { 1:'clamp(5.5rem,22vw,8rem)', 2:'clamp(4.25rem,17vw,6.75rem)', 3:'clamp(3rem,11.5vw,4.5rem)' }[len];
+  const pinyinClass = word.pinyin.length > 10 ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl';
+  return (
+    <div className="card-scene card-h relative mx-auto w-full max-w-[24rem]">
+
+      {/* Audio control — pinned to the card's top-right corner.
+          Sits OUTSIDE the 3D flip, so it stays put (and stays tappable)
+          whether you're on the hanzi side or the meaning side. */}
+      <div className="absolute top-4 right-4 z-10">
+        <SpeakButton text={word.hanzi}/>
+      </div>
+
+      <div role="button" tabIndex={0} aria-pressed={flipped}
+        aria-label={'Flashcard: ' + word.hanzi + '. Activate to flip.'}
+        className="card-press w-full h-full" onClick={onFlip}>
+        <div className={'card-inner' + (flipped ? ' is-flipped' : '')}>
+
+          {/* FRONT — hanzi only, set in Noto Serif SC */}
+          <div className="card-face front bg-white dark:bg-night-card border border-ink/10 dark:border-white/10 flex items-center justify-center">
+            <i className="crnr crnr-tl"/>
+            <span className="absolute top-4 left-5 text-[11px] tracking-[0.25em] uppercase text-ink/35 dark:text-white/35 tabular-nums">
+              {pad2(pos+1)}<span className="opacity-50"> / {pad2(total)}</span>
+            </span>
+            <span key={word.id} className="front-in font-kai font-normal text-ink dark:text-porcelain select-none leading-none"
+              style={{ fontSize: hanziSize }}>{word.hanzi}</span>
+            <span className="absolute bottom-4 inset-x-0 text-center text-[10px] uppercase tracking-[0.35em] text-ink/30 dark:text-white/30">tap to flip</span>
+          </div>
+
+          {/* BACK — pinyin / part of speech / english */}
+          <div className="card-face back bg-white dark:bg-night-card border border-ink/10 dark:border-white/10 flex">
+            <i className="crnr crnr-tl"/>
+            <span className="absolute top-4 left-5 text-[11px] tracking-[0.25em] uppercase text-ink/35 dark:text-white/35 tabular-nums">
+              {pad2(pos+1)}<span className="opacity-50"> / {pad2(total)}</span>
+            </span>
+            <div className="back-content w-full flex flex-col items-center justify-center gap-4 text-center px-6">
+              <span className={'font-serif italic font-semibold text-jade ' + pinyinClass}>{word.pinyin}</span>
+              <span className="text-[10px] uppercase tracking-[0.3em] text-ink/45 dark:text-white/45 border border-ink/15 dark:border-white/15 rounded-full px-3.5 py-1.5">{word.pos}</span>
+              <span className="w-10 h-px bg-ink/15 dark:bg-white/15"/>
+              <span className="font-serif text-2xl sm:text-[1.7rem] leading-snug text-ink dark:text-white max-w-[16rem]">{word.english}</span>
+            </div>
+            <div className="absolute bottom-4 inset-x-5 flex items-end justify-between">
+              <span className="font-kai text-xl text-ink/35 dark:text-white/35">{word.hanzi}</span>
+              <span className="seal w-9 h-9 text-lg">学</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function nextStudyStep(level, lesson){
+  const i = level.lessons.findIndex(l => l.id === lesson.id);
+  if (i < level.lessons.length - 1) return { level, lesson: level.lessons[i+1], label: 'Next lesson' };
+  const levels = api.getLevels();
+  const li = levels.findIndex(l => l.id === level.id);
+  if (li < levels.length - 1) {
+    const nl = levels[li+1];
+    return { level: nl, lesson: nl.lessons[0], label: 'Start ' + nl.label };
+  }
+  return null;
+}
+
+function Completion({ level, lesson, total, seenCount, onRestart }){
+  const next = nextStudyStep(level, lesson);
+  return (
+    <div className="w-full max-w-md mx-auto rounded-2xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card px-8 py-10 text-center">
+      <span className="seal w-16 h-16 text-3xl stamp">完</span>
+      <h2 className="mt-6 font-serif text-3xl font-semibold tracking-tight">Lesson complete</h2>
+      <p className="mt-3 text-sm leading-relaxed text-ink/55 dark:text-white/55">
+        You worked through all {total} words of {lessonName(lesson)}.&nbsp;
+        {seenCount < total
+          ? seenCount + ' revealed — flip the rest next time to complete the set.'
+          : 'Every card revealed. This deck is yours.'}
+      </p>
+      <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <button onClick={onRestart} className="btn-primary h-11">
+          <Icon name="rotate-ccw" size={15}/> Study again
+        </button>
+        {next && (
+          <a href={lessonHref(next.level, next.lesson)} className="btn-ghost h-11">
+            {next.label} <Icon name="arrow-right" size={15}/>
+          </a>
+        )}
+      </div>
+      <a href={levelHref(level)} className="mt-6 inline-block text-[11px] uppercase tracking-[0.25em] text-ink/40 dark:text-white/40 hover:text-jade transition-colors">All lessons</a>
+    </div>
+  );
+}
+
+
+function VocabularySection({ words, hidePinyin, onTogglePinyin }){
+  return (
+    <section className="w-full mb-6 sm:mb-8" aria-labelledby="vocabulary-heading">
+      <div className="flex items-end justify-between gap-3 mb-3">
+        <div>
+          <p className="eyebrow">Lesson vocabulary</p>
+          <h2 id="vocabulary-heading" className="mt-1 font-serif text-2xl font-semibold tracking-tight">
+            Vocabulary <span className="font-hanzi text-base text-ink/40 dark:text-white/40">词汇</span>
+          </h2>
+        </div>
+        <PinyinToggle hidePinyin={hidePinyin} onTogglePinyin={onTogglePinyin}/>
+      </div>
+
+      {/* One word per row, numbered */}
+      <div className="space-y-2">
+        {words.map((word, i) => (
+          <div key={word.id}
+            className="flex items-center gap-2.5 sm:gap-4 rounded-xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card px-3.5 sm:px-4 py-3">
+            <span className="w-5 sm:w-7 shrink-0 text-right text-xs font-bold tabular-nums text-ink/35 dark:text-white/35">
+              {i + 1}
+            </span>
+            <span className="font-kai text-xl sm:text-2xl leading-none shrink-0 w-20 sm:w-32">{word.hanzi}</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold leading-snug text-ink dark:text-white break-words">{word.english}</div>
+              <div className={'mt-0.5 min-h-[1.25rem] text-xs font-serif italic ' + (hidePinyin ? 'select-none text-transparent' : 'text-jade')}
+                aria-hidden={hidePinyin}>{word.pinyin}</div>
+            </div>
+            <SpeakButton text={word.hanzi}/>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
+/* ================================================================
+   HSK 4 study helpers — exam-frequency tiers
+   (hskFreq: hanzi -> [rank, seen×] from 27 real HSK 4 papers)
+================================================================ */
+const TIER_META = {
+  1: { label:'Tier 1', name:'Critical',   range:'rank 1–300',
+       badge:'text-seal border-seal/35 bg-seal/10 dark:text-[#ef7f72] dark:border-[#ef7f72]/35 dark:bg-seal/15', bar:'bg-seal' },
+  2: { label:'Tier 2', name:'High value', range:'rank 301–600',
+       badge:'text-jade-deep border-jade/40 bg-jade/10 dark:text-jade', bar:'bg-jade' },
+  3: { label:'Tier 3', name:'Supporting', range:'rank 601–900',
+       badge:'text-ink/70 border-ink/20 bg-ink/5 dark:text-white/70 dark:border-white/20 dark:bg-white/[0.06]', bar:'bg-ink/40 dark:bg-white/40' },
+  4: { label:'Tier 4', name:'Low',        range:'rank 901+',
+       badge:'text-ink/45 border-ink/15 dark:text-white/45 dark:border-white/15', bar:'bg-ink/20 dark:bg-white/25' }
+};
+/* characters whose exam count merges several readings (e.g. 得 de / děi) */
+const SHARED_COUNT = new Set(['得','干','趟','脏','等','省','行','结果']);
+const tierOf = rank => rank <= 300 ? 1 : rank <= 600 ? 2 : rank <= 900 ? 3 : 4;
+function freqInfo(hanzi){
+  const f = hskFreq[hanzi];
+  return f ? { rank:f[0], seen:f[1], tier:tierOf(f[0]), shared:SHARED_COUNT.has(hanzi) } : null;
+}
+
+function TierBadge({ tier }){
+  if (!tier) return (
+    <span className="inline-flex items-center rounded-full border border-dashed border-ink/20 dark:border-white/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink/40 dark:text-white/40 whitespace-nowrap">Not ranked</span>
+  );
+  const m = TIER_META[tier];
+  return (
+    <span className={'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] whitespace-nowrap ' + m.badge}>
+      {m.label} · {m.name}
+    </span>
+  );
+}
+
+function PinyinToggle({ hidePinyin, onTogglePinyin }){
+  return (
+    <button type="button" onClick={onTogglePinyin} aria-pressed={hidePinyin}
+      className={'btn-ghost h-9 px-3 text-xs shrink-0' + (hidePinyin ? ' text-jade border-jade/50' : '')}>
+      {hidePinyin ? 'Show pinyin' : 'Hide pinyin'}
+    </button>
+  );
+}
+
+/* ================================================================
+   Important words tab — this lesson's words, ranked by exam frequency
+================================================================ */
+function ImportantSection({ words, hidePinyin, onTogglePinyin }){
+  const [filter, setFilter] = useState('all');
+  const rows = words.map((w, i) => ({ w, i, f: freqInfo(w.hanzi) }));
+  const sorted = [...rows].sort((a, b) => {
+    const sa = a.f ? a.f.seen : -1, sb = b.f ? b.f.seen : -1;
+    return (sb - sa) || ((a.f && b.f) ? a.f.rank - b.f.rank : 0) || (a.i - b.i);
+  });
+  const counts = { all: rows.length, 1:0, 2:0, 3:0, 4:0, none:0 };
+  rows.forEach(r => { counts[r.f ? r.f.tier : 'none']++; });
+  const visible = sorted.filter(r => filter === 'all' ? true : filter === 'none' ? !r.f : (r.f && String(r.f.tier) === String(filter)));
+  const maxSeen = Math.max(1, ...rows.map(r => r.f ? r.f.seen : 0));
+  const chips = [['all','All'],[1,'Tier 1'],[2,'Tier 2'],[3,'Tier 3'],[4,'Tier 4'],['none','Not ranked']];
+  const hasShared = visible.some(r => r.f && r.f.shared);
+
+  return (
+    <section className="w-full mb-6 sm:mb-8" aria-labelledby="important-heading">
+      <div className="flex items-end justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="eyebrow">Ranked by real exams</p>
+          <h2 id="important-heading" className="mt-1 font-serif text-2xl font-semibold tracking-tight">
+            Important words <span className="font-hanzi text-base text-ink/40 dark:text-white/40">重点词</span>
+          </h2>
+        </div>
+        <PinyinToggle hidePinyin={hidePinyin} onTogglePinyin={onTogglePinyin}/>
+      </div>
+      <p className="mb-4 text-xs leading-relaxed text-ink/55 dark:text-white/55">
+        <span className="font-semibold text-ink dark:text-white">×N</span> = how many times the word appeared in 27 real HSK 4 papers; <span className="font-semibold text-ink dark:text-white">#N</span> = its rank among 1,200 words. Study the top of the list first.
+      </p>
+
+      {/* Tier filter */}
+      <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Filter by tier">
+        {chips.map(([key, label]) => {
+          const n = counts[key];
+          const on = String(filter) === String(key);
+          return (
+            <button key={key} type="button" onClick={() => setFilter(key)} aria-pressed={on} disabled={n === 0 && key !== 'all'}
+              className={'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ' +
+                (on ? 'border-jade text-jade bg-jade/10'
+                    : 'border-ink/15 dark:border-white/15 text-ink/60 dark:text-white/60 hover:border-jade hover:text-jade')}>
+              {label}<span className="tabular-nums opacity-60">{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="space-y-2">
+        {visible.map((r, idx) => {
+          const { w, f } = r;
+          const pct = f ? Math.max(3, Math.round(f.seen / maxSeen * 100)) : 0;
+          return (
+            <div key={w.id}
+              className="rounded-xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card px-3.5 sm:px-4 py-3">
+              <div className="flex items-center gap-2.5 sm:gap-4">
+                <span className="w-5 sm:w-7 shrink-0 text-right text-xs font-bold tabular-nums text-ink/35 dark:text-white/35">{idx + 1}</span>
+                <span className="font-kai text-2xl leading-none min-w-0 flex-1 break-words">{w.hanzi}</span>
+                <div className="shrink-0 text-right leading-none">
+                  {f ? (
+                    <>
+                      <div className="font-serif text-lg font-semibold tabular-nums" title={f.shared ? 'This count merges several readings of the character' : undefined}>×{f.seen}{f.shared ? '*' : ''}</div>
+                      <div className="mt-1 text-[10px] tracking-wider tabular-nums text-ink/40 dark:text-white/40">#{f.rank}</div>
+                    </>
+                  ) : (
+                    <div className="text-xs text-ink/35 dark:text-white/35">—</div>
+                  )}
+                </div>
+                <SpeakButton text={w.hanzi}/>
+              </div>
+              <div className="mt-2 pl-7 sm:pl-11">
+                <div className="text-sm font-semibold text-ink dark:text-white leading-snug break-words">{w.english}</div>
+                <div className={'mt-0.5 min-h-[1.25rem] text-xs font-serif italic ' + (hidePinyin ? 'select-none text-transparent' : 'text-jade')}
+                  aria-hidden={hidePinyin}>{w.pinyin}</div>
+                <div className="mt-1.5 flex items-center gap-3">
+                  <div className="h-1 flex-1 rounded-full bg-ink/10 dark:bg-white/10 overflow-hidden">
+                    {f && <div className={'h-full rounded-full ' + TIER_META[f.tier].bar} style={{ width: pct + '%' }}/>}
+                  </div>
+                  <TierBadge tier={f ? f.tier : 0}/>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {hasShared && (
+        <p className="mt-3 text-[11px] text-ink/40 dark:text-white/40">* This character has several readings that share one count in the source list.</p>
+      )}
+      <p className="mt-3 text-[11px] leading-relaxed text-ink/40 dark:text-white/40">
+        “Not ranked” = the exact word has no separate entry in the 1,200-word frequency list.
+      </p>
+    </section>
+  );
+}
+
+/* ================================================================
+   Grammar tab — patterns, structure and bilingual examples
+================================================================ */
+function splitGrammarTitle(title){
+  const gloss = [];
+  const pattern = title.replace(/\s*\(([A-Za-z][^()]*)\)/g, (m, g) => { gloss.push(g.trim()); return ''; }).trim();
+  return { pattern: pattern || title, gloss: gloss.join(' vs. ') };
+}
+function grammarKeywords(pattern, lessonWords){
+  const runs = pattern.match(/[\u3400-\u9fff]+/g) || [];
+  const vocab = new Set(lessonWords.map(w => w.hanzi));
+  const seen = new Set(), out = [];
+  runs.forEach(r => {
+    if (seen.has(r)) return; seen.add(r);
+    if (r.length < 2 && !vocab.has(r)) return;
+    const f = freqInfo(r);
+    if (f) out.push({ hanzi:r, f });
+  });
+  return out;
+}
+
+function GrammarSection({ points, words, hidePinyin, onTogglePinyin }){
+  const [hideEnglish, setHideEnglish] = useState(false);
+  return (
+    <section className="w-full mb-6 sm:mb-8" aria-labelledby="grammar-heading">
+      <div className="flex items-end justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="eyebrow">Patterns & examples</p>
+          <h2 id="grammar-heading" className="mt-1 font-serif text-2xl font-semibold tracking-tight">
+            Grammar <span className="font-hanzi text-base text-ink/40 dark:text-white/40">语法</span>
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <PinyinToggle hidePinyin={hidePinyin} onTogglePinyin={onTogglePinyin}/>
+          <button type="button" onClick={() => setHideEnglish(v => !v)} aria-pressed={hideEnglish}
+            className={'btn-ghost h-9 px-3 text-xs' + (hideEnglish ? ' text-jade border-jade/50' : '')}>
+            {hideEnglish ? 'Show English' : 'Hide English'}
+          </button>
+        </div>
+      </div>
+
+      {(!points || points.length === 0) ? (
+        <div className="rounded-xl border border-dashed border-ink/20 dark:border-white/20 px-4 py-8 text-center text-sm text-ink/50 dark:text-white/50">
+          No grammar points for this lesson yet.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {points.map(p => {
+            const { pattern, gloss } = splitGrammarTitle(p.title);
+            const hasHanzi = /[\u3400-\u9fff]/.test(pattern);
+            const keys = grammarKeywords(pattern, words);
+            return (
+              <article key={p.n}
+                className="rounded-2xl border border-ink/10 dark:border-white/10 bg-white dark:bg-night-card p-4 sm:p-5">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <span className="font-serif text-3xl font-semibold leading-none text-jade tabular-nums shrink-0">{pad2(p.n)}</span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className={(hasHanzi ? 'font-kai text-2xl sm:text-3xl' : 'font-serif text-xl font-semibold') + ' leading-snug break-words'}>{pattern}</h3>
+                    {gloss && <p className="mt-1 text-sm font-serif italic text-jade break-words">{gloss}</p>}
+                  </div>
+                </div>
+
+                {keys.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-ink/40 dark:text-white/40 mr-1">In exams</span>
+                    {keys.map(k => (
+                      <span key={k.hanzi} className="inline-flex items-center gap-1.5 rounded-full border border-ink/10 dark:border-white/10 pl-2.5 pr-1 py-0.5 text-xs">
+                        <span className="font-kai text-sm">{k.hanzi}</span>
+                        <span className="tabular-nums text-ink/55 dark:text-white/55">×{k.f.seen}</span>
+                        <span className={'rounded-full border px-1.5 text-[10px] font-bold ' + TIER_META[k.f.tier].badge}>T{k.f.tier}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {p.desc && <p className="mt-3 text-sm leading-relaxed text-ink/70 dark:text-white/70">{p.desc}</p>}
+
+                {p.structure && (
+                  <div className="mt-3 rounded-lg bg-ink/[0.04] dark:bg-white/[0.06] px-3.5 py-2.5">
+                    <span className="block text-[10px] uppercase tracking-[0.25em] text-ink/40 dark:text-white/40">Structure</span>
+                    <span className="mt-1 block font-kai text-lg leading-snug break-words">{p.structure}</span>
+                  </div>
+                )}
+
+                <div className="mt-4 space-y-3">
+                  {p.examples.map((e, i) => (
+                    <div key={i} className="border-l-2 border-jade/50 pl-3.5">
+                      <div className="flex items-start gap-3">
+                        <p className="font-kai text-xl leading-relaxed flex-1 min-w-0 break-words">{e.zh}</p>
+                        <SpeakButton text={e.zh}/>
+                      </div>
+                      <p className={'mt-1 text-sm font-serif italic leading-snug break-words ' + (hidePinyin ? 'select-none text-transparent' : 'text-jade')}
+                        aria-hidden={hidePinyin}>{e.py}</p>
+                      <p className={'mt-1 text-sm leading-snug break-words ' + (hideEnglish ? 'select-none text-transparent' : 'text-ink/65 dark:text-white/65')}
+                        aria-hidden={hideEnglish}>{e.en}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LessonPage({ level, lesson }){
+  const words = lesson.words;
+  const total = words.length;
+  const grammarPoints = hskGrammar[level.id] ? (hskGrammar[level.id][lesson.id] || []) : null;
+  const hasStudyTabs = grammarPoints !== null;   /* HSK 4: vocabulary · important · grammar · flashcards */
+  const TABS = hasStudyTabs
+    ? [['vocabulary','Vocabulary','Vocabulary'], ['important','Important words','Important'], ['grammar','Grammar','Grammar'], ['flashcards','Flashcards','Flashcards']]
+    : [['vocabulary','Vocabulary','Vocabulary'], ['flashcards','Flashcards','Flashcards']];
+
+  const [order, setOrder]     = useState(words.map((_, i) => i));
+  const [shuffled, setShuffled] = useState(false);
+  const [pos, setPos]         = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [done, setDone]       = useState(false);
+  const [hidePinyin, setHidePinyin] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => {
+    let saved = null;
+    try { saved = localStorage.getItem('hf-tab-v1'); } catch(e){}
+    return TABS.some(t => t[0] === saved) ? saved : 'vocabulary';
+  });
+  const [seen, setSeen]       = useState(() => new Set(progressStore.seenFor(level.id, lesson.id)));
+
+  const word = words[order[pos]];
+
+  const go = (d) => {
+    if (d > 0) {
+      if (done) return;
+      if (pos === total - 1) { setDone(true); setFlipped(false); return; }
+      setPos(pos + 1); setFlipped(false);
+    } else {
+      if (done) { setDone(false); setFlipped(false); return; }
+      if (pos === 0) return;
+      setPos(pos - 1); setFlipped(false);
+    }
+  };
+  const flip = () => {
+    setFlipped(f => !f);
+    if (!flipped) {
+      const id = word.id;
+      setSeen(s => { const n = new Set(s); n.add(id); return n; });
+      progressStore.markSeen(level.id, lesson.id, id);
+    }
+  };
+  const restart = () => { setPos(0); setDone(false); setFlipped(false); };
+  const toggleShuffle = () => {
+    if (!shuffled) {
+      const arr = [...order];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      setOrder(arr);
+    } else {
+      setOrder(words.map((_, i) => i));
+    }
+    setShuffled(!shuffled);
+    setPos(0); setDone(false); setFlipped(false);
+  };
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    setFlipped(false);
+    try { localStorage.setItem('hf-tab-v1', tab); } catch(e){}
+  };
+
+  const actionsRef = useRef({ go, flip, tab: activeTab });
+  actionsRef.current = { go, flip, tab: activeTab };
+
+  /* Keyboard: arrows navigate, space/enter flips — flashcard tab only,
+     so Space still scrolls the other tabs and never marks a hidden card as seen. */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (actionsRef.current.tab !== 'flashcards') return;
+      const tag = (e.target && e.target.tagName) || '';
+      if ((e.key === ' ' || e.key === 'Enter') && (tag === 'BUTTON' || tag === 'A')) return; // native click wins
+      if (e.key === 'ArrowRight') actionsRef.current.go(1);
+      else if (e.key === 'ArrowLeft') actionsRef.current.go(-1);
+      else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); actionsRef.current.flip(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [level.id, lesson.id]);
+
+  const onCards = activeTab === 'flashcards';
+  const tabBtn = (id, long, short) => (
+    <button key={id} type="button" role="tab" id={'tab-' + id} aria-selected={activeTab === id}
+      onClick={() => switchTab(id)}
+      className={'shrink-0 whitespace-nowrap px-1 pb-3 mr-4 sm:mr-6 last:mr-0 text-[13px] sm:text-sm font-semibold border-b-2 transition-colors ' +
+        (activeTab === id ? 'border-jade text-jade' : 'border-transparent text-ink/45 dark:text-white/45 hover:text-ink dark:hover:text-white')}>
+      {long === short ? long : (<><span className="sm:hidden">{short}</span><span className="hidden sm:inline">{long}</span></>)}
+    </button>
+  );
+
+  return (
+    <div className="relative page-h flex flex-col">
+      {/* Focus layer — dims & blurs the background while the card is flipped */}
+      <div aria-hidden="true"
+        className={'focus-overlay fixed inset-0 z-10 pointer-events-none transition-opacity duration-500 ' + (onCards && flipped && !done ? 'opacity-100' : 'opacity-0')}/>
+
+      <div className="relative z-20 flex-1 w-full max-w-3xl mx-auto flex flex-col px-4 sm:px-6 pt-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
+        {/* Header */}
+        <header className="flex items-center justify-between gap-3 transition-opacity duration-500"
+          style={{ opacity: onCards && flipped && !done ? .45 : 1 }}>
+          <a href={levelHref(level)}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-ink/55 dark:text-white/55 hover:text-jade transition-colors shrink-0">
+            <Icon name="chevron-left" size={16}/>
+            <span className="hidden sm:inline">{level.label} lessons</span>
+            <span className="sm:hidden">Lessons</span>
+          </a>
+          <div className="min-w-0 text-center">
+            <p className="font-hanzi text-[11px] text-jade leading-none">第{CN_NUM[lesson.id]}课</p>
+            <h1 className="mt-1 font-serif font-semibold text-base sm:text-lg truncate">{lesson.title}</h1>
+          </div>
+          <span className="shrink-0 text-xs font-bold tabular-nums text-ink/40 dark:text-white/40">
+            {onCards ? (done ? total : pos + 1) + ' / ' + total : total + ' words'}
+          </span>
+        </header>
+
+        {onCards && <span className="sr-only" aria-live="polite">Word {pos + 1} of {total}: {word.hanzi}</span>}
+
+        <div className="mt-5 mb-4 flex overflow-x-auto no-scrollbar border-b border-ink/10 dark:border-white/10" role="tablist" aria-label="Lesson study mode">
+          {TABS.map(t => tabBtn(t[0], t[1], t[2]))}
+        </div>
+
+        {activeTab === 'vocabulary' && (
+          <VocabularySection words={words} hidePinyin={hidePinyin} onTogglePinyin={() => setHidePinyin(value => !value)}/>
+        )}
+        {activeTab === 'important' && hasStudyTabs && (
+          <ImportantSection words={words} hidePinyin={hidePinyin} onTogglePinyin={() => setHidePinyin(value => !value)}/>
+        )}
+        {activeTab === 'grammar' && hasStudyTabs && (
+          <GrammarSection points={grammarPoints} words={words} hidePinyin={hidePinyin} onTogglePinyin={() => setHidePinyin(value => !value)}/>
+        )}
+        {onCards && (
+          <>
+            {/* Card / completion */}
+            <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
+              {done
+                ? <Completion level={level} lesson={lesson} total={total} seenCount={seen.size} onRestart={restart}/>
+                : <Flashcard word={word} pos={pos} total={total} flipped={flipped} onFlip={flip}/>}
+            </div>
+
+            {/* Controls */}
+            {!done && (
+              <div className="w-full max-w-[24rem] mx-auto">
+                <div className="flex gap-1">
+                  {order.map((wi, i) => {
+                    const isSeen = seen.has(words[wi].id);
+                    return (
+                      <div key={i} title={words[wi].hanzi}
+                        className={'h-1.5 flex-1 rounded-full transition-colors duration-300 ' +
+                          (isSeen ? (i === pos ? 'bg-jade-deep' : 'bg-jade')
+                                  : (i === pos ? 'bg-ink/40 dark:bg-white/40' : 'bg-ink/10 dark:bg-white/10'))}/>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-ink/45 dark:text-white/45">
+                    Word {pos + 1} of {total}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={toggleShuffle} title="Shuffle deck" aria-label="Shuffle deck" aria-pressed={shuffled}
+                      className={'btn-mini' + (shuffled ? ' is-on' : '')}><Icon name="shuffle" size={13}/></button>
+                    <button onClick={restart} title="Restart lesson" aria-label="Restart lesson" className="btn-mini">
+                      <Icon name="rotate-ccw" size={13}/>
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button onClick={() => go(-1)} disabled={pos === 0} aria-label="Previous word" className="btn-round">
+                    <Icon name="chevron-left" size={20}/>
+                  </button>
+                  <button onClick={flip} className="btn-reveal">
+                    {flipped ? 'Show hanzi' : 'Reveal meaning'}
+                  </button>
+                  <button onClick={() => go(1)} aria-label={pos === total - 1 ? 'Finish lesson' : 'Next word'} className="btn-round">
+                    {pos === total - 1 ? <Icon name="check" size={20}/> : <Icon name="chevron-right" size={20}/>}
+                  </button>
+                </div>
+                <p className="mt-4 text-center text-[11px] text-ink/35 dark:text-white/35">
+                  {seen.size} of {total} reviewed · <span className="hidden sm:inline">keyboard: arrows navigate, space flips</span><span className="sm:hidden">tap the card to flip</span>
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   404 + App shell
+================================================================ */
+function NotFound(){
+  return (
+    <div className="max-w-xl mx-auto px-6 py-24 text-center">
+      <span className="seal w-14 h-14 text-2xl">迷</span>
+      <h1 className="mt-6 font-serif text-4xl font-semibold tracking-tight">Lost your way?</h1>
+      <p className="mt-3 text-ink/55 dark:text-white/55">That page isn't in the textbook. Head back to the levels and pick a deck.</p>
+      <a href="#/" className="btn-primary mt-8">Back to levels <Icon name="arrow-right" size={16}/></a>
+    </div>
+  );
+}
+
+function App(){
+  const route = useHashRoute();
+  const [dark, setDark] = useDarkMode();
+  const isLesson = route.name === 'lesson';
+  let content = null, notFound = false;
+
+  if (route.name === 'level') {
+    const lv = api.getLevel(route.levelId);
+    lv ? content = <LevelPage level={lv}/> : notFound = true;
+  } else if (isLesson) {
+    const lv = api.getLevel(route.levelId);
+    const ls = lv && api.getLesson(route.levelId, route.lessonId);
+    ls ? content = <LessonPage level={lv} lesson={ls}/> : notFound = true;
+  } else {
+    content = <HomePage/>;
+  }
+
+  useEffect(() => {
+    let t = 'HanziBoss · HSK Flashcards';
+    if (route.name === 'level') { const lv = api.getLevel(route.levelId); t = (lv ? lv.title : 'Not found') + ' · HanziBoss'; }
+    if (route.name === 'lesson') { const ls = api.getLesson(route.levelId, route.lessonId); t = (ls ? ls.title : 'Lesson') + ' · HanziBoss'; }
+    document.title = t;
+  }, [route]);
+
+  const totalWords = api.getLevels().reduce((a,l) => a + l.lessons.reduce((x,ls) => x + ls.words.length, 0), 0);
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar dark={dark} onToggle={() => setDark(!dark)}/>
+      <main key={window.location.hash || '#/'} className="page flex-1">
+        {notFound ? <NotFound/> : content}
+      </main>
+      {!isLesson && !notFound && <Footer words={totalWords}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
